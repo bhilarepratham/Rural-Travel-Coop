@@ -47,6 +47,11 @@ def api_post(path: str, body: dict | None = None):
     """Send data to the backend. Returns the JSON, or None if the call failed."""
     try:
         r = requests.post(f"{BACKEND_URL}{path}", json=body, timeout=30)
+        if r.status_code == 422:
+            # The backend rejected the input (for example a bad email). Show its plain message.
+            detail = r.json().get("detail", "Please check what you entered.")
+            st.warning(detail if isinstance(detail, str) else "Please check what you entered.")
+            return None
         r.raise_for_status()
         return r.json()
     except requests.RequestException as e:
