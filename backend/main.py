@@ -6,9 +6,10 @@ API docs:     http://localhost:8000/docs
 Done on Day 1:  /health, /cities, /trips
 Day 5: /members saves sign ups (free Tier 1 or paid Tier 2) and /members/count summarizes them.
 Day 4: /clicks logs referral clicks in SQLite and /clicks/report summarizes them.
-Day 2: trips now live in a SQLite database (trips.db) instead of a Python list.
-To build later: /clicks (Day 4), /members (Day 5)
+Day 2: trips now live in a database instead of a Python list.
+Week 9 Day 2: set DATABASE_URL to use hosted Postgres (Neon); without it a local SQLite file is used.
 """
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -20,36 +21,108 @@ from data import CITIES, TRIPS
 
 app = FastAPI(title="Rural Travel Co-op API (prototype)")
 
+# Week 9 Day 2: if the DATABASE_URL environment variable is set (the Neon connection string),
+# the API uses that hosted Postgres database. If it is not set, it uses a local SQLite file,
+# so running on your own computer still works with no setup.
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USE_POSTGRES = DATABASE_URL.startswith("postgres")
 DB_PATH = Path(__file__).parent / "trips.db"
 
+if USE_POSTGRES:
+    import psycopg
+    from psycopg.rows import dict_row
 
-def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row   # lets us read columns by name
-    return conn
+
+class Db:
+    """Small wrapper so the rest of the code does not care which database is behind it."""
+
+    def __init__(self) -> None:
+        if USE_POSTGRES:
+            self.conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=15)
+        else:
+            self.conn = sqlite3.connect(DB_PATH)
+            self.conn.row_factory = sqlite3.Row   # lets us read columns by name
+
+    def execute(self, sql: str, params: tuple = ()):
+        if USE_POSTGRES:
+            sql = sql.replace("?", "%s")           # Postgres uses %s, SQLite uses ?
+        return self.conn.execute(sql, params)
+
+    def insert(self, sql: str, params: tuple = ()) -> int:
+        """Run an INSERT and return the new row id."""
+        if USE_POSTGRES:
+            return self.execute(sql + " RETURNING id", params).fetchone()["id"]
+        return self.execute(sql, params).lastrowid
+
+    def commit(self) -> None:
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+
+def get_db() -> Db:
+    return Db()
+
+
+SQLITE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS operators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, mode TEXT NOT NULL,
+    is_partner INTEGER NOT NULL DEFAULT 0, booking_url TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS trips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL REFERENCES operators(id),
+    origin TEXT NOT NULL, destination TEXT NOT NULL, depart_time TEXT NOT NULL,
+    arrive_time TEXT NOT NULL, price REAL NOT NULL, days_running TEXT, season_start TEXT,
+    season_end TEXT, booking_url TEXT, source_url TEXT, last_updated TEXT DEFAULT CURRENT_DATE,
+    is_sample INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL,
+    trip_id INTEGER NOT NULL REFERENCES trips(id), riders INTEGER NOT NULL DEFAULT 1,
+    price_at_click REAL NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0,
+    clicked_at TEXT DEFAULT CURRENT_TIMESTAMP, confirmed_at TEXT);
+CREATE TABLE IF NOT EXISTS members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE,
+    tier INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS partner_weekly_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL REFERENCES operators(id),
+    week_start TEXT NOT NULL, route_label TEXT NOT NULL, partner_sales_total REAL NOT NULL,
+    tagged_tickets INTEGER NOT NULL DEFAULT 0, tagged_value REAL NOT NULL DEFAULT 0, notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE (operator_id, week_start, route_label));
+"""
 
 
 def setup_database() -> None:
-    """Create the trips table and fill it from data.py if it is empty."""
-    conn = get_db()
-    conn.execute("""CREATE TABLE IF NOT EXISTS trips (
-        id INTEGER PRIMARY KEY, origin TEXT, destination TEXT, operator TEXT,
-        mode TEXT, depart TEXT, arrive TEXT, price REAL, partner INTEGER, url TEXT)""")
-    if conn.execute("SELECT COUNT(*) FROM trips").fetchone()[0] == 0:
+    """Create the tables if needed and fill them with the made up sample trips if empty."""
+    db = get_db()
+    if USE_POSTGRES:
+        # schema.sql is the same file you ran in the Neon SQL Editor. It is safe to run again.
+        db.conn.execute((Path(__file__).parent / "schema.sql").read_text())
+    else:
+        cols = [r["name"] for r in db.execute("PRAGMA table_info(trips)").fetchall()]
+        if cols and "operator_id" not in cols:
+            # An old trips.db from before Week 9 has a different layout. It only held sample data,
+            # so it is safe to remove and rebuild.
+            for table in ("clicks", "members", "trips"):
+                db.execute(f"DROP TABLE IF EXISTS {table}")
+        db.conn.executescript(SQLITE_SCHEMA)
+    if db.execute("SELECT COUNT(*) AS n FROM trips").fetchone()["n"] == 0:
+        operator_ids = {}
         for t in TRIPS:
-            conn.execute("INSERT INTO trips VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (t["id"], t["from"], t["to"], t["operator"], t["mode"], t["depart"],
-                 t["arrive"], t["price"], int(t["partner"]), t["url"]))
-        conn.commit()
-    conn.execute("""CREATE TABLE IF NOT EXISTS clicks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT, trip_id INTEGER, operator TEXT,
-        price REAL, riders INTEGER DEFAULT 1, confirmed INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS members (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, tier INTEGER,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
-    conn.commit()
-    conn.close()
+            if t["operator"] not in operator_ids:
+                row = db.execute("SELECT id FROM operators WHERE name = ?", (t["operator"],)).fetchone()
+                if row:
+                    operator_ids[t["operator"]] = row["id"]
+                else:
+                    operator_ids[t["operator"]] = db.insert(
+                        "INSERT INTO operators (name, mode, is_partner, booking_url) VALUES (?,?,?,?)",
+                        (t["operator"], t["mode"], bool(t["partner"]), t["url"]))
+            db.execute(
+                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                "price, booking_url, is_sample) VALUES (?,?,?,?,?,?,?,?)",
+                (operator_ids[t["operator"]], t["from"], t["to"], t["depart"], t["arrive"],
+                 t["price"], t["url"], True))
+    db.commit()
+    db.close()
 
 
 setup_database()
@@ -71,28 +144,31 @@ def search_trips(
     destination: str = Query(..., description="Arrival city"),
     mode: Optional[str] = Query(None, description="Rail or Bus. Leave empty for both."),
 ) -> list[dict]:
-    """Return sample trips for a route from the database, cheapest first."""
-    sql = ("SELECT * FROM trips WHERE lower(origin) = lower(?) "
-           "AND lower(destination) = lower(?)")
+    """Return trips for a route from the database, cheapest first."""
+    sql = ("SELECT t.id, t.origin, t.destination, t.depart_time, t.arrive_time, t.price, "
+           "COALESCE(t.booking_url, o.booking_url) AS url, o.name AS operator, o.mode, "
+           "o.is_partner, t.is_sample FROM trips t JOIN operators o ON o.id = t.operator_id "
+           "WHERE lower(t.origin) = lower(?) AND lower(t.destination) = lower(?)")
     params = [origin, destination]
     if mode:
-        sql += " AND lower(mode) = lower(?)"
+        sql += " AND lower(o.mode) = lower(?)"
         params.append(mode)
-    sql += " ORDER BY price"
-    conn = get_db()
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
+    sql += " ORDER BY t.price"
+    db = get_db()
+    rows = db.execute(sql, tuple(params)).fetchall()
+    db.close()
     # Keep the same field names the frontend already uses ("from" and "to")
     return [{"id": r["id"], "from": r["origin"], "to": r["destination"],
-             "operator": r["operator"], "mode": r["mode"], "depart": r["depart"],
-             "arrive": r["arrive"], "price": r["price"], "partner": bool(r["partner"]),
-             "url": r["url"]} for r in rows]
+             "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"],
+             "arrive": r["arrive_time"], "price": float(r["price"]),
+             "partner": bool(r["is_partner"]), "url": r["url"],
+             "sample": bool(r["is_sample"])} for r in rows]
 
 
 class Click(BaseModel):
     ref: str          # tracking code, for example "coop-1"
     trip_id: int
-    operator: str
+    operator: str = ""   # kept so older frontends still work; the operator is read from the trip
     riders: int = 1
 
 
@@ -102,28 +178,30 @@ FEE_RATE = 0.06       # Base case blended fee from the payback model
 @app.post("/clicks")
 def log_click(click: Click) -> dict:
     """Save one referral click. The price is read from the trips table, not from the browser."""
-    conn = get_db()
-    trip = conn.execute("SELECT price FROM trips WHERE id = ?", (click.trip_id,)).fetchone()
+    db = get_db()
+    trip = db.execute("SELECT t.price, o.name FROM trips t JOIN operators o ON o.id = t.operator_id "
+                      "WHERE t.id = ?", (click.trip_id,)).fetchone()
     if trip is None:
-        conn.close()
+        db.close()
         raise HTTPException(status_code=404, detail="Unknown trip_id")
-    cur = conn.execute(
-        "INSERT INTO clicks (ref, trip_id, operator, price, riders) VALUES (?,?,?,?,?)",
-        (click.ref, click.trip_id, click.operator, trip["price"], max(click.riders, 1)))
-    conn.commit()
-    click_id = cur.lastrowid
-    conn.close()
-    return {"id": click_id, "ref": click.ref, "operator": click.operator}
+    click_id = db.insert(
+        "INSERT INTO clicks (ref, trip_id, price_at_click, riders) VALUES (?,?,?,?)",
+        (click.ref, click.trip_id, trip["price"], max(click.riders, 1)))
+    db.commit()
+    db.close()
+    return {"id": click_id, "ref": click.ref, "operator": trip["name"]}
 
 
 @app.post("/clicks/{click_id}/confirm")
 def confirm_click(click_id: int) -> dict:
     """Pilot only: the partner reports that this click became a ticket sale."""
-    conn = get_db()
-    cur = conn.execute("UPDATE clicks SET confirmed = 1 WHERE id = ?", (click_id,))
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
+    db = get_db()
+    cur = db.execute("UPDATE clicks SET confirmed = ?, confirmed_at = CURRENT_TIMESTAMP "
+                     "WHERE id = ?", (True, click_id))
+    db.commit()
+    found = cur.rowcount
+    db.close()
+    if found == 0:
         raise HTTPException(status_code=404, detail="Unknown click id")
     return {"id": click_id, "confirmed": True}
 
@@ -132,15 +210,17 @@ def confirm_click(click_id: int) -> dict:
 def click_report(partner_sales: Optional[float] = Query(
         None, description="Partner's total ticket sales ($) for the same routes and weeks")) -> dict:
     """Clicks and confirmed bookings per operator, plus the capture rate if partner sales are given."""
-    conn = get_db()
-    rows = conn.execute("""SELECT operator, COUNT(*) AS clicks, SUM(confirmed) AS bookings,
-        SUM(CASE WHEN confirmed = 1 THEN price * riders ELSE 0 END) AS booked_value
-        FROM clicks GROUP BY operator ORDER BY clicks DESC""").fetchall()
-    conn.close()
+    db = get_db()
+    rows = db.execute("""SELECT o.name AS operator, COUNT(*) AS clicks,
+        SUM(CASE WHEN c.confirmed THEN 1 ELSE 0 END) AS bookings,
+        SUM(CASE WHEN c.confirmed THEN c.price_at_click * c.riders ELSE 0 END) AS booked_value
+        FROM clicks c JOIN trips t ON t.id = c.trip_id JOIN operators o ON o.id = t.operator_id
+        GROUP BY o.name ORDER BY COUNT(*) DESC""").fetchall()
+    db.close()
     operators = []
     for r in rows:
-        bookings = r["bookings"] or 0
-        value = r["booked_value"] or 0.0
+        bookings = int(r["bookings"] or 0)
+        value = float(r["booked_value"] or 0.0)
         operators.append({
             "operator": r["operator"], "clicks": r["clicks"], "bookings": bookings,
             "click_to_booking": round(bookings / r["clicks"], 3),
@@ -169,26 +249,25 @@ def join(member: Member) -> dict:
         raise HTTPException(status_code=422, detail="Please enter a valid email address")
     if member.tier not in (1, 2):
         raise HTTPException(status_code=422, detail="Tier must be 1 (free) or 2 (paid)")
-    conn = get_db()
-    existing = conn.execute("SELECT id, tier FROM members WHERE email = ?", (email,)).fetchone()
+    db = get_db()
+    existing = db.execute("SELECT id, tier FROM members WHERE email = ?", (email,)).fetchone()
     if existing:
         # Same email again: update the tier instead of creating a duplicate
-        conn.execute("UPDATE members SET tier = ? WHERE id = ?", (member.tier, existing["id"]))
-        conn.commit()
-        conn.close()
+        db.execute("UPDATE members SET tier = ? WHERE id = ?", (member.tier, existing["id"]))
+        db.commit()
+        db.close()
         return {"id": existing["id"], "email": email, "tier": member.tier, "status": "updated"}
-    cur = conn.execute("INSERT INTO members (email, tier) VALUES (?, ?)", (email, member.tier))
-    conn.commit()
-    member_id = cur.lastrowid
-    conn.close()
+    member_id = db.insert("INSERT INTO members (email, tier) VALUES (?, ?)", (email, member.tier))
+    db.commit()
+    db.close()
     return {"id": member_id, "email": email, "tier": member.tier, "status": "created"}
 
 
 @app.get("/members/count")
 def member_count() -> dict:
     """How many people joined, by tier (no emails are returned)."""
-    conn = get_db()
-    rows = conn.execute("SELECT tier, COUNT(*) AS n FROM members GROUP BY tier").fetchall()
-    conn.close()
+    db = get_db()
+    rows = db.execute("SELECT tier, COUNT(*) AS n FROM members GROUP BY tier").fetchall()
+    db.close()
     counts = {r["tier"]: r["n"] for r in rows}
     return {"tier1": counts.get(1, 0), "tier2": counts.get(2, 0), "total": sum(counts.values())}
