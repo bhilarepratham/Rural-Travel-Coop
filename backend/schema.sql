@@ -27,8 +27,11 @@ CREATE TABLE IF NOT EXISTS trips (
     booking_url   TEXT,                   -- link to this trip's booking page, if different from the operator's
     source_url    TEXT,
     last_updated  DATE NOT NULL DEFAULT CURRENT_DATE,
-    is_sample     BOOLEAN NOT NULL DEFAULT FALSE   -- true for made up demo rows
+    is_sample     BOOLEAN NOT NULL DEFAULT FALSE,  -- true for made up demo rows
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE    -- false hides an old or replaced row without deleting it
 );
+-- For databases created before Week 9 Day 3 (safe to run again):
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 CREATE INDEX IF NOT EXISTS trips_route_idx ON trips (lower(origin), lower(destination));
 
 -- One row per press of "Continue to operator site".
