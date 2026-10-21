@@ -29,7 +29,12 @@ CSS = """
 :root { --ink:#0f2a4a; --blue:#1b5fa8; --amber:#f2a900; --paper:#f1f5fa; --line:#d6dee9;
         --green:#0a7c4a; --muted:#5b6b80; }
 html, body, [class*="css"], .stApp { font-family:'Public Sans', system-ui, sans-serif; }
-.stApp { background:var(--paper); }
+.stApp { background:var(--paper); color:var(--ink); color-scheme:light; }
+.stApp label, .stApp label p, .stApp [data-testid="stWidgetLabel"] p, .stApp .stMarkdown p,
+.stApp [data-testid="stCheckbox"] p, .stApp [data-testid="stRadio"] p { color:var(--ink); }
+.stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"],
+.stApp input { background-color:#eef2f7 !important; color:var(--ink) !important; }
+.stApp [data-baseweb="select"] svg { fill:var(--ink); }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility:hidden; height:0; }
 .block-container { padding-top:0 !important; max-width:1180px; }
 
