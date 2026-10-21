@@ -12,12 +12,14 @@ Week 9 Day 2: set DATABASE_URL to use hosted Postgres (Neon); without it a local
 import os
 import sqlite3
 from pathlib import Path
+from datetime import date
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from data import CITIES, TRIPS
+import arr_data
+from data import TRIPS
 
 app = FastAPI(title="Rural Travel Co-op API (prototype)")
 
@@ -74,7 +76,7 @@ CREATE TABLE IF NOT EXISTS trips (
     origin TEXT NOT NULL, destination TEXT NOT NULL, depart_time TEXT NOT NULL,
     arrive_time TEXT NOT NULL, price REAL NOT NULL, days_running TEXT, season_start TEXT,
     season_end TEXT, booking_url TEXT, source_url TEXT, last_updated TEXT DEFAULT CURRENT_DATE,
-    is_sample INTEGER NOT NULL DEFAULT 0);
+    is_sample INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS clicks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL,
     trip_id INTEGER NOT NULL REFERENCES trips(id), riders INTEGER NOT NULL DEFAULT 1,
@@ -105,24 +107,67 @@ def setup_database() -> None:
             for table in ("clicks", "members", "trips"):
                 db.execute(f"DROP TABLE IF EXISTS {table}")
         db.conn.executescript(SQLITE_SCHEMA)
-    if db.execute("SELECT COUNT(*) AS n FROM trips").fetchone()["n"] == 0:
-        operator_ids = {}
-        for t in TRIPS:
-            if t["operator"] not in operator_ids:
-                row = db.execute("SELECT id FROM operators WHERE name = ?", (t["operator"],)).fetchone()
-                if row:
-                    operator_ids[t["operator"]] = row["id"]
-                else:
-                    operator_ids[t["operator"]] = db.insert(
-                        "INSERT INTO operators (name, mode, is_partner, booking_url) VALUES (?,?,?,?)",
-                        (t["operator"], t["mode"], bool(t["partner"]), t["url"]))
-            db.execute(
-                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
-                "price, booking_url, is_sample) VALUES (?,?,?,?,?,?,?,?)",
-                (operator_ids[t["operator"]], t["from"], t["to"], t["depart"], t["arrive"],
-                 t["price"], t["url"], True))
+        cols = [r["name"] for r in db.execute("PRAGMA table_info(trips)").fetchall()]
+        if "is_active" not in cols:
+            db.execute("ALTER TABLE trips ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    seed_demo_trips(db)
+    load_arr_trips(db)
     db.commit()
     db.close()
+
+
+def get_operator_id(db: Db, name: str, mode: str, is_partner: bool, url: str, notes: str = "") -> int:
+    row = db.execute("SELECT id FROM operators WHERE name = ?", (name,)).fetchone()
+    if row:
+        return row["id"]
+    return db.insert("INSERT INTO operators (name, mode, is_partner, booking_url, notes) "
+                     "VALUES (?,?,?,?,?)", (name, mode, is_partner, url, notes))
+
+
+def seed_demo_trips(db: Db) -> None:
+    """Made up bus trips, added only on a brand new database."""
+    if db.execute("SELECT COUNT(*) AS n FROM trips").fetchone()["n"] > 0:
+        return
+    for t in TRIPS:
+        op_id = get_operator_id(db, t["operator"], t["mode"], bool(t["partner"]), t["url"])
+        db.execute(
+            "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+            "price, booking_url, is_sample) VALUES (?,?,?,?,?,?,?,?)",
+            (op_id, t["from"], t["to"], t["depart"], t["arrive"], t["price"], t["url"], True))
+
+
+def load_arr_trips(db: Db) -> None:
+    """Load the real, unofficial Alaska Railroad list. Safe to run on every start.
+
+    Each row is matched on route, departure time and season start: an existing row is updated
+    (so trip ids stay the same and click history is kept), a missing row is added, and any old
+    Alaska Railroad row no longer in arr_data.py is hidden. The old made up "Sample Railroad"
+    trips are hidden too."""
+    op = arr_data.OPERATOR
+    op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+    db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, op_id))
+    old = db.execute("SELECT id FROM operators WHERE name = ?", ("Sample Railroad",)).fetchone()
+    if old:
+        db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, old["id"]))
+    for (origin, dest, dep, arr, price, days, start, end) in arr_data.ARR_TRIPS:
+        days_text = f"{days} ({arr_data.CLASS_NOTE})"
+        found = db.execute(
+            "SELECT id FROM trips WHERE operator_id = ? AND origin = ? AND destination = ? "
+            "AND depart_time = ? AND season_start = ?", (op_id, origin, dest, dep, start)).fetchone()
+        if found:
+            db.execute(
+                "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_end = ?, "
+                "booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, is_active = ? "
+                "WHERE id = ?",
+                (arr, price, days_text, end, op["booking_url"], arr_data.SCHEDULE_URL,
+                 arr_data.CHECKED, False, True, found["id"]))
+        else:
+            db.execute(
+                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                "price, days_running, season_start, season_end, booking_url, source_url, "
+                "last_updated, is_sample, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (op_id, origin, dest, dep, arr, price, days_text, start, end,
+                 op["booking_url"], arr_data.SCHEDULE_URL, arr_data.CHECKED, False, True))
 
 
 setup_database()
@@ -135,7 +180,20 @@ def health() -> dict:
 
 @app.get("/cities")
 def cities() -> list[str]:
-    return CITIES
+    """Every place that appears in an active trip, in alphabetical order."""
+    db = get_db()
+    rows = db.execute("SELECT origin AS city FROM trips WHERE is_active = ? UNION "
+                      "SELECT destination AS city FROM trips WHERE is_active = ?",
+                      (True, True)).fetchall()
+    db.close()
+    return sorted(r["city"] for r in rows)
+
+
+def season_status(start, end, on: Optional[date]) -> Optional[bool]:
+    """True if the trip's season includes the date, False if not, None if unknown."""
+    if on is None or not start or not end:
+        return None
+    return str(start) <= on.isoformat() <= str(end)
 
 
 @app.get("/trips")
@@ -143,13 +201,15 @@ def search_trips(
     origin: str = Query(..., description="Departure city"),
     destination: str = Query(..., description="Arrival city"),
     mode: Optional[str] = Query(None, description="Rail or Bus. Leave empty for both."),
+    on: Optional[date] = Query(None, description="Travel date (YYYY-MM-DD). Adds an in_season flag."),
 ) -> list[dict]:
-    """Return trips for a route from the database, cheapest first."""
+    """Return active trips for a route from the database, cheapest first."""
     sql = ("SELECT t.id, t.origin, t.destination, t.depart_time, t.arrive_time, t.price, "
+           "t.days_running, t.season_start, t.season_end, t.source_url, t.last_updated, "
            "COALESCE(t.booking_url, o.booking_url) AS url, o.name AS operator, o.mode, "
            "o.is_partner, t.is_sample FROM trips t JOIN operators o ON o.id = t.operator_id "
-           "WHERE lower(t.origin) = lower(?) AND lower(t.destination) = lower(?)")
-    params = [origin, destination]
+           "WHERE t.is_active = ? AND lower(t.origin) = lower(?) AND lower(t.destination) = lower(?)")
+    params = [True, origin, destination]
     if mode:
         sql += " AND lower(o.mode) = lower(?)"
         params.append(mode)
@@ -162,7 +222,12 @@ def search_trips(
              "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"],
              "arrive": r["arrive_time"], "price": float(r["price"]),
              "partner": bool(r["is_partner"]), "url": r["url"],
-             "sample": bool(r["is_sample"])} for r in rows]
+             "sample": bool(r["is_sample"]), "days": r["days_running"],
+             "season_start": str(r["season_start"]) if r["season_start"] else None,
+             "season_end": str(r["season_end"]) if r["season_end"] else None,
+             "in_season": season_status(r["season_start"], r["season_end"], on),
+             "source_url": r["source_url"],
+             "last_updated": str(r["last_updated"]) if r["last_updated"] else None} for r in rows]
 
 
 class Click(BaseModel):
