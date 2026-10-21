@@ -74,7 +74,7 @@ def report_panel() -> None:
         if report["operators"]:
             st.dataframe(report["operators"], width="stretch")
         else:
-            st.caption("No clicks yet. Book a sample trip first.")
+            st.caption("No clicks yet. Book a trip first.")
 
 
 def search_screen() -> None:
@@ -83,9 +83,10 @@ def search_screen() -> None:
     cities = api_get("/cities")
     if not cities:
         return
-    origin = st.selectbox("From", cities, index=0)
-    dest = st.selectbox("To", cities, index=1)
-    when = st.date_input("Date", value=date.today())
+    origin = st.selectbox("From", cities, index=cities.index("Anchorage") if "Anchorage" in cities else 0)
+    dest = st.selectbox("To", cities, index=cities.index("Seward") if "Seward" in cities else 1)
+    # Most listed Alaska Railroad trains run in summer 2027, so the date starts in that season.
+    when = st.date_input("Date", value=date(2027, 7, 15))
     riders = st.number_input("Riders", min_value=1, max_value=10, value=1)
     report_panel()
     if st.button("Search bus and train", type="primary", width="stretch"):
@@ -110,12 +111,12 @@ def duration_text(t: dict) -> str:
 def results_screen() -> None:
     q = st.session_state.query
     st.subheader(f"2. Results: {q['from']} to {q['to']}")
-    st.caption(f"{q['date']:%b %d, %Y} | {q['riders']} rider(s) | Sample data only")
+    st.caption(f"{q['date']:%b %d, %Y} | {q['riders']} rider(s) | Unofficial prototype listing")
     col_a, col_b = st.columns(2)
     mode = col_a.selectbox("Mode", ["Rail and bus", "Rail only", "Bus only"])
     sort_by = col_b.selectbox("Sort by", ["Cheapest", "Earliest departure", "Shortest trip"])
 
-    params = {"origin": q["from"], "destination": q["to"]}
+    params = {"origin": q["from"], "destination": q["to"], "on": q["date"].isoformat()}
     if mode == "Rail only":
         params["mode"] = "Rail"
     elif mode == "Bus only":
@@ -130,7 +131,7 @@ def results_screen() -> None:
     trips.sort(key=keys[sort_by])
 
     if not trips:
-        st.info("No sample trips match. Try Anchorage to Seward, or choose Rail and bus.")
+        st.info("No trips match. Try Anchorage to Seward or Anchorage to Fairbanks, or choose Rail and bus.")
     else:
         cheapest = min(trips, key=lambda t: t["price"])
         fastest = min(trips, key=lambda t: minutes(t["arrive"]) - minutes(t["depart"]))
@@ -144,12 +145,19 @@ def results_screen() -> None:
             c1, c2 = st.columns([3, 1])
             c1.markdown(f"**{t['operator']}** ({t['mode']})")
             c1.write(f"{t['depart']} to {t['arrive']} | {duration_text(t)}")
-            tags = ["Co-op partner" if t["partner"] else "Listed only"]
+            tags = ["Demo data (made up)" if t["sample"] else "Published schedule, unofficial"]
+            tags.append("Co-op partner" if t["partner"] else "Listed only")
+            if t.get("in_season") is True:
+                tags.append("Runs on your date")
+            elif t.get("in_season") is False:
+                tags.append(f"Not in season on your date ({t['season_start']} to {t['season_end']})")
             if t is cheapest:
                 tags.append("Cheapest")
             if t is fastest:
                 tags.append("Shortest")
             c1.caption(" | ".join(tags))
+            if t.get("days"):
+                c1.caption(f"{t['days']} | season {t['season_start']} to {t['season_end']}")
             c2.markdown(f"### ${t['price'] * q['riders']:.0f}")
             c2.caption(f"${t['price']:.0f} per rider")
             if c2.button("Book", key=f"book{t['id']}"):
@@ -180,6 +188,9 @@ def handoff_screen() -> None:
         if st.button("Demo: the partner confirms this ticket was sold"):
             if api_post(f"/clicks/{st.session_state.click_id}/confirm"):
                 st.success("Marked as a booking. See the pilot report on the search screen.")
+    if t.get("source_url"):
+        st.caption(f"Times and fare copied from the operator's public schedule (checked {t.get('last_updated')}). "
+                   f"Confirm on the operator's site before you buy. Source: {t['source_url']}")
     st.caption(f"Link includes our tracking code: {ref}")
     c1, c2 = st.columns(2)
     c1.button("Back to results", on_click=go, args=("results",), width="stretch")
@@ -208,7 +219,8 @@ def join_screen() -> None:
 
 
 st.title("🚌 Rural Travel Co-op")
-st.caption("Prototype with made up sample data. Not a real booking site.")
+st.caption("Unofficial research prototype. Alaska Railroad times and fares are copied from its public "
+           "schedule; it is not a partner. Bus trips marked demo are made up. Not a real booking site.")
 st.progress((STEPS.index(st.session_state.step) + 1) / len(STEPS))
 
 {"search": search_screen, "results": results_screen, "handoff": handoff_screen, "join": join_screen}[
