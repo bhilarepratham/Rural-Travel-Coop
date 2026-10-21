@@ -151,6 +151,10 @@ def clock(hhmm: str) -> str:
 
 def header(title: str) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
+    # Ask browsers and dark mode extensions not to restyle this page (it is designed in light colors)
+    st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
+            "['color-scheme:light','darkreader-lock:'].forEach(function(x){var m=d.createElement('meta');"
+            "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
     st.markdown(
         f"""<div class="topband"><div class="brand">🚆 Rural Travel Co-op</div>
         <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>
