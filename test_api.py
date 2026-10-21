@@ -1,23 +1,55 @@
-import sys, os
+import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from fastapi.testclient import TestClient
-import main
+import arr_data, main
+
+# A leftover made up "Sample Railroad" trip from the old seed data, with a click on it
+db = main.get_db()
+old_op = main.get_operator_id(db, "Sample Railroad", "Rail", True, "https://example.com")
+old_trip = db.insert("INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, is_sample) "
+                     "VALUES (?,?,?,?,?,?,?)", (old_op, "Anchorage", "Seward", "08:00", "12:00", 89, True))
+db.execute("INSERT INTO clicks (ref, trip_id, price_at_click) VALUES (?,?,?)", ("old", old_trip, 89))
+db.commit(); db.close()
+main.setup_database()           # the start up step: loads real data and hides the old sample rail trip
+
 c = TestClient(main.app)
 assert c.get("/health").json() == {"status": "ok"}
-t = c.get("/trips", params={"origin": "anchorage", "destination": "SEWARD"}).json()
-assert [x["price"] for x in t] == [45.0, 52.0, 89.0], t
-assert t[0]["operator"] == "Sample Coach Lines" and t[0]["partner"] is True and t[1]["partner"] is False
-assert len(c.get("/trips", params={"origin": "Anchorage", "destination": "Seward", "mode": "rail"}).json()) == 1
-assert c.post("/clicks", json={"ref": "x", "trip_id": 999, "operator": "z"}).status_code == 404
-a = c.post("/clicks", json={"ref": "coop-1", "trip_id": t[0]["id"], "operator": "x", "riders": 2}).json()
-b = c.post("/clicks", json={"ref": "coop-2", "trip_id": t[2]["id"]}).json()
-assert a["operator"] == "Sample Coach Lines"
+cities = c.get("/cities").json()
+assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Anchorage", "Seward"}), cities
+
+t = c.get("/trips", params={"origin": "anchorage", "destination": "SEWARD", "on": "2027-07-15"}).json()
+assert [x["operator"] for x in t] == ["Sample Coach Lines", "Sample Shuttle Co", "Alaska Railroad"], t
+rail = t[2]
+assert rail["price"] == 133.0 and rail["depart"] == "06:45" and rail["arrive"] == "11:20"
+assert rail["sample"] is False and rail["partner"] is False and rail["in_season"] is True
+assert rail["source_url"] == arr_data.SCHEDULE_URL and rail["season_start"] == "2027-05-14"
+assert t[0]["sample"] is True and t[0]["in_season"] is None
+off = c.get("/trips", params={"origin": "Anchorage", "destination": "Seward", "mode": "Rail", "on": "2026-10-21"}).json()
+assert len(off) == 1 and off[0]["in_season"] is False       # the old Sample Railroad row is hidden
+assert len(c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json()) == 2   # Denali Star + Aurora Winter
+assert c.get("/trips", params={"origin": "Fairbanks", "destination": "Seward"}).json() == []
+
+# restart keeps ids stable, adds no duplicates, keeps click history
+before = {(x["id"]) for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Seward"}).json()}
+a = c.post("/clicks", json={"ref": "coop-1", "trip_id": rail["id"], "riders": 2}).json()
+main.setup_database()
+after = {(x["id"]) for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Seward"}).json()}
+assert before == after
+db = main.get_db()
+n = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='Alaska Railroad'").fetchone()["n"]
+assert n == len(arr_data.ARR_TRIPS), n
+assert db.execute("SELECT COUNT(*) AS n FROM clicks").fetchone()["n"] >= 2
+db.close()
+
+# clicks, report, members (as before)
+assert a["operator"] == "Alaska Railroad"
+assert c.post("/clicks", json={"ref": "x", "trip_id": 99999}).status_code == 404
 assert c.post(f"/clicks/{a['id']}/confirm").json()["confirmed"] is True
 assert c.post("/clicks/99999/confirm").status_code == 404
-r = c.get("/clicks/report", params={"partner_sales": 1800}).json()
-co = [o for o in r["operators"] if o["operator"] == "Sample Coach Lines"][0]
-assert co["clicks"] == 1 and co["bookings"] == 1 and co["booked_value"] == 90.0 and co["fee_value"] == 5.4, r
-assert r["total_clicks"] == 2 and r["capture_rate"] == 0.05, r
+r = c.get("/clicks/report", params={"partner_sales": 5320}).json()
+ar = [o for o in r["operators"] if o["operator"] == "Alaska Railroad"][0]
+assert ar["clicks"] == 1 and ar["bookings"] == 1 and ar["booked_value"] == 266.0 and ar["fee_value"] == 15.96, r
+assert r["capture_rate"] == 0.05, r
 assert c.post("/members", json={"email": "", "tier": 1}).status_code == 422
 assert c.post("/members", json={"email": "a@b.com", "tier": 3}).status_code == 422
 assert c.post("/members", json={"email": " A@B.com ", "tier": 1}).json()["status"] == "created"
