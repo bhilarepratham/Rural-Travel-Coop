@@ -25,100 +25,114 @@ DEFAULT_DATE = date(2027, 7, 15)   # most listed Alaska Railroad trains run in s
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap');
-:root { --ink:#0f2a4a; --blue:#1b5fa8; --amber:#f2a900; --paper:#f1f5fa; --line:#d6dee9;
-        --green:#0a7c4a; --muted:#5b6b80; }
-html, body, [class*="css"], .stApp { font-family:'Public Sans', system-ui, sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap');
+:root { --ink:#0e2b26; --spruce:#1f6b57; --fire:#b3265e; --paper:#e8f0ee; --line:#b9cdc8; --field:#f4f8f7;
+        --green:#14543f; --muted:#40595a; --display:'Barlow Condensed','Arial Narrow',sans-serif; }
+html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system-ui, sans-serif; }
 .stApp { background:var(--paper); color:var(--ink); color-scheme:light; }
 .stApp label, .stApp label p, .stApp [data-testid="stWidgetLabel"] p, .stApp .stMarkdown p,
 .stApp [data-testid="stCheckbox"] p, .stApp [data-testid="stRadio"] p { color:var(--ink); }
+.stApp h2, .stApp h3, .stApp h4 { font-family:var(--display); letter-spacing:.01em; color:var(--ink); }
 .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"],
-.stApp input { background-color:#eef2f7 !important; color:var(--ink) !important; }
+.stApp input { background-color:var(--field) !important; color:var(--ink) !important; }
+.stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] { border-color:#8fa9a3 !important; }
 .stApp [data-baseweb="select"] svg { fill:var(--ink); }
-/* date, number and text inputs, including their inner wrappers */
 .stApp [data-testid="stDateInput"] div, .stApp [data-testid="stDateInput"] input,
 .stApp [data-testid="stNumberInput"] div, .stApp [data-testid="stNumberInput"] input,
 .stApp [data-testid="stTextInput"] div, .stApp [data-testid="stTextInput"] input
-    { background-color:#eef2f7 !important; color:var(--ink) !important; -webkit-text-fill-color:var(--ink) !important; }
+    { background-color:var(--field) !important; color:var(--ink) !important; -webkit-text-fill-color:var(--ink) !important; }
 .stApp [data-testid="stDateInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stDateInput"] [data-testid="stWidgetLabel"] div,
 .stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"] div,
 .stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"] div
     { background-color:transparent !important; }
-.stApp [data-testid="stNumberInput"] button { background-color:#e1e8f1 !important; color:var(--ink) !important; }
+.stApp [data-testid="stNumberInput"] button { background-color:#dbe7e4 !important; color:var(--ink) !important; }
 .stApp [data-testid="stNumberInput"] button svg { fill:var(--ink) !important; }
 .stApp input::placeholder { color:var(--muted) !important; -webkit-text-fill-color:var(--muted) !important; }
-/* dropdown menus and calendar pop-ups */
 [data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul, [data-baseweb="calendar"],
 [data-baseweb="calendar"] div { background-color:#fff !important; color:var(--ink) !important; }
 [data-baseweb="popover"] li { background-color:#fff !important; color:var(--ink) !important; }
-[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] { background-color:#e5eefb !important; }
-/* secondary buttons (Join the co-op, Back, etc.) */
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] { background-color:#dbe9e5 !important; }
 .stApp .stButton button:not([kind="primary"]), .stApp .stDownloadButton button, .stApp .stLinkButton a:not([kind="primary"])
-    { background-color:#fff !important; color:var(--ink) !important; border:1px solid var(--blue) !important; }
+    { background-color:#fff !important; color:var(--ink) !important; border:2px solid var(--spruce) !important; }
 .stApp .stButton button:not([kind="primary"]) p, .stApp .stLinkButton a:not([kind="primary"]) p { color:var(--ink) !important; }
-.stApp .stButton button:not([kind="primary"]):hover { background-color:#e5eefb !important; }
+.stApp .stButton button:not([kind="primary"]):hover { background-color:#dbe9e5 !important; }
+.stApp .stButton button[kind="primary"], .stApp .stLinkButton a[kind="primary"],
+.stApp [data-testid="stFormSubmitButton"] button { background-color:var(--fire) !important; color:#fff !important; border:none !important; }
+.stApp .stButton button[kind="primary"]:hover, .stApp [data-testid="stFormSubmitButton"] button:hover { background-color:#8f1d4b !important; }
 .stApp .stButton button[kind="primary"] p, .stApp .stLinkButton a[kind="primary"] p,
 .stApp [data-testid="stFormSubmitButton"] button p { color:#fff !important; }
-/* expander, radios, checkboxes, tabs */
+.stApp .stButton button, .stApp .stLinkButton a, .stApp [data-testid="stFormSubmitButton"] button
+    { border-radius:4px; font-weight:700; min-height:2.75rem; }
+.stApp button:focus-visible, .stApp a:focus-visible, .stApp input:focus-visible { outline:3px solid var(--ink) !important; outline-offset:2px; }
 .stApp [data-testid="stExpander"] details, .stApp [data-testid="stExpander"] summary { background-color:transparent !important; color:var(--ink) !important; }
 .stApp [data-baseweb="tab"] { color:var(--ink) !important; background:transparent !important; }
-.stApp [data-baseweb="checkbox"] span, .stApp [data-baseweb="radio"] div { border-color:#7b8da3; }
+.stApp [data-baseweb="checkbox"] span, .stApp [data-baseweb="radio"] div { border-color:#6f8a84; }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility:hidden; height:0; }
 .block-container { padding-top:0 !important; max-width:1180px; }
 
-/* top band */
-.topband { background:var(--ink); width:100vw; margin-left:calc(50% - 50vw); padding:1.1rem calc(50vw - 590px + 5rem) 4.6rem; color:#fff; box-sizing:border-box; }
-.topband .brand { font-size:1.35rem; font-weight:800; letter-spacing:-.01em; }
-.topband .tag { color:#b9c9de; font-size:.95rem; margin-top:.15rem; }
-.topband h1 { font-size:2.05rem; font-weight:800; margin:1.3rem 0 0; letter-spacing:-.02em; color:#fff; }
-.notice { background:#fff7e0; border-left:4px solid var(--amber); color:#5a4300; padding:.55rem .8rem;
-          font-size:.85rem; border-radius:4px; margin:.8rem 0 0; }
+/* captions, alerts and spacing */
+.stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] p { color:var(--muted) !important; opacity:1 !important; }
+.stApp [data-testid="stAlert"] { background-color:#dbe9e5 !important; border-left:5px solid var(--spruce); border-radius:4px; }
+.stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] div { color:var(--ink) !important; }
+.stApp [data-testid="stMetric"] * { color:var(--ink) !important; }
+.st-key-summary, .st-key-pricebox, .st-key-tier1, .st-key-tier2 { margin-top:1.4rem; }
+.st-key-tier1, .st-key-tier2 { min-height:9.5rem; }
+.stApp [data-testid="stTextInput"] [data-baseweb="base-input"] { border:1px solid #8fa9a3; border-radius:4px; }
+.st-key-summary h3, .st-key-tier1 h3, .st-key-tier2 h3 { font-size:1.9rem; }
+.st-key-pricebox h2 { font-family:var(--display); font-size:3.2rem; margin:0; }
 
-/* search bar sits over the band, framed in amber */
-.st-key-searchbar { background:#fff; border:4px solid var(--amber); border-radius:10px;
-                    padding:.9rem 1rem .4rem; margin-top:-3.6rem; position:relative; z-index:3; box-shadow:0 6px 18px rgba(15,42,74,.18); }
-.st-key-searchbar label p { font-weight:600; font-size:.8rem; color:var(--muted); }
-.st-key-searchbar [data-testid="stFormSubmitButton"] button {
-    background:var(--blue); border:none; font-weight:700; min-height:2.9rem; margin-top:1.55rem; color:#fff; }
+/* hero band with the route line */
+.topband { background:var(--ink); width:100vw; margin-left:calc(50% - 50vw); padding:1.3rem calc(50vw - 590px + 5rem) 5rem; color:#fff; box-sizing:border-box; }
+.topband .brand { font-family:var(--display); font-size:1.5rem; font-weight:700; letter-spacing:.03em; }
+.topband .tag { color:#b8d3cb; font-size:.95rem; margin-top:.1rem; }
+.topband h1 { font-family:var(--display); font-size:3rem; font-weight:700; line-height:1.02; margin:1.2rem 0 .2rem; letter-spacing:.005em; color:#fff; }
+.route { display:block; width:100%; max-width:720px; height:auto; margin:.6rem 0 .4rem; }
+.notice { background:#f4f8f7; border-left:5px solid var(--fire); color:var(--ink); padding:.55rem .8rem;
+          font-size:.88rem; border-radius:3px; margin:.9rem 0 0; }
 
-/* filter panel */
-.st-key-filters { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem 1rem .5rem; }
-.st-key-filters h4 { font-size:1rem; margin:0 0 .4rem; color:var(--ink); }
+/* search bar sits over the band */
+.st-key-searchbar { background:#fff; border:2px solid var(--ink); border-radius:6px;
+                    padding:.9rem 1rem .4rem; margin-top:-3.6rem; position:relative; z-index:3; box-shadow:0 8px 0 var(--fire); }
+.st-key-searchbar label p { font-weight:700; font-size:.85rem; color:var(--muted); }
+.st-key-searchbar [data-testid="stFormSubmitButton"] button { min-height:2.9rem; margin-top:1.55rem; }
 
-/* result cards */
-[class*="st-key-card-"] { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem 1.1rem;
-                          margin-bottom:.8rem; }
-[class*="st-key-card-"]:hover { border-color:var(--blue); }
+.st-key-filters { background:#fff; border:1px solid var(--line); border-radius:6px; padding:1rem 1rem .5rem; }
+.st-key-filters h4 { font-size:1.25rem; margin:0 0 .4rem; }
+
+/* result cards read like a ticket: times and route line, a perforated edge, then the price */
+[class*="st-key-card-"] { background:#fff; border:1px solid var(--line); border-radius:6px; padding:1rem 1.2rem;
+                          margin-bottom:.9rem; }
+[class*="st-key-card-"]:hover { border-color:var(--ink); }
+[class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:2px dashed var(--line); padding-left:1.1rem; }
 .op { font-weight:700; color:var(--ink); font-size:1.05rem; }
-.pill { display:inline-block; font-size:.72rem; font-weight:600; padding:.1rem .5rem; border-radius:99px;
-        margin-left:.4rem; background:#e5eefb; color:var(--blue); vertical-align:middle; }
-.trip { display:flex; align-items:center; gap:.8rem; margin:.7rem 0 .2rem; }
-.trip .t { font-size:1.45rem; font-weight:700; color:var(--ink); line-height:1; }
-.trip .place { font-size:.78rem; color:var(--muted); margin-top:.2rem; }
-.trip .bar { flex:1; text-align:center; font-size:.78rem; color:var(--muted); min-width:90px; }
-.trip .bar:before { content:""; display:block; border-top:2px solid var(--line); margin-bottom:.25rem; }
-.badges { margin-top:.55rem; }
-.badge { display:inline-block; font-size:.74rem; font-weight:600; padding:.15rem .5rem; border-radius:4px;
-         margin:0 .35rem .3rem 0; background:#eef2f7; color:#33475f; }
-.badge.good { background:#dff3e8; color:var(--green); }
-.badge.fast { background:#e5eefb; color:var(--blue); }
-.badge.warn { background:#fff1cc; color:#7a5600; }
-.badge.bad { background:#fde8e8; color:#9b1c1c; }
-.small { font-size:.8rem; color:var(--muted); margin-top:.3rem; }
-.price { text-align:right; }
-.price .big { font-size:1.9rem; font-weight:800; color:var(--ink); line-height:1.1; }
-.price .per { font-size:.78rem; color:var(--muted); }
+.pill { display:inline-block; font-size:.78rem; font-weight:700; padding:.05rem .5rem; border-radius:3px;
+        margin-left:.5rem; background:var(--ink); color:#fff; vertical-align:middle; }
+.trip { display:flex; align-items:center; gap:.9rem; margin:.7rem 0 .2rem; }
+.trip .t { font-family:var(--display); font-size:2.1rem; font-weight:600; color:var(--ink); line-height:1; white-space:nowrap; }
+.trip .place { font-size:.85rem; color:var(--muted); margin-top:.2rem; }
+.trip .bar { flex:1; text-align:center; font-size:.82rem; color:var(--muted); min-width:90px; position:relative; padding-bottom:.9rem; }
+.trip .bar:after { content:""; position:absolute; left:0; right:0; bottom:.35rem; border-top:3px solid var(--spruce);
+                   background:radial-gradient(circle, var(--spruce) 0 5px, transparent 6px) left center/12px 12px no-repeat,
+                              radial-gradient(circle, var(--fire) 0 5px, transparent 6px) right center/12px 12px no-repeat; height:0; }
+.badges { margin-top:.6rem; }
+.badge { display:inline-block; font-size:.8rem; font-weight:700; padding:.15rem .5rem; border-radius:3px;
+         margin:0 .35rem .3rem 0; background:#e0eae7; color:#2b4742; }
+.badge.good { background:#d6ecdf; color:var(--green); }
+.badge.fast { background:#dbe7f3; color:#1d4e89; }
+.badge.warn { background:#fbeccb; color:#6b4a00; }
+.badge.bad { background:#f8dbe4; color:#8e1f45; }
+.small { font-size:.85rem; color:var(--muted); margin-top:.3rem; }
+.price { text-align:left; }
+.price .big { font-family:var(--display); font-size:2.8rem; font-weight:700; color:var(--ink); line-height:1; }
+.price .per { font-size:.82rem; color:var(--muted); margin-bottom:.5rem; }
 
-/* summary and tier cards */
 .st-key-summary, .st-key-tier1, .st-key-tier2, .st-key-pricebox { background:#fff; border:1px solid var(--line);
-    border-radius:8px; padding:1rem 1.2rem; }
-.st-key-tier2 { border-color:var(--blue); border-width:2px; }
-.stButton button, .stLinkButton a { border-radius:6px; font-weight:600; }
-.stButton button[kind="primary"], .stLinkButton a[kind="primary"] { background:var(--blue); border:none; }
+    border-radius:6px; padding:1rem 1.2rem; }
+.st-key-tier2 { border-color:var(--fire); border-width:2px; }
 @media (max-width:1200px){ .topband { padding-left:4rem; padding-right:4rem; } }
-@media (max-width:760px){ .topband { padding:1rem 1rem 4.6rem !important; } .topband h1 { font-size:1.5rem; }
-    .trip .t { font-size:1.15rem; } .price { text-align:left; margin-top:.6rem; } }
-@media (prefers-reduced-motion:no-preference){ [class*="st-key-card-"] { transition:border-color .15s; } }
+@media (max-width:760px){ .topband { padding:1rem 1rem 4.6rem !important; } .topband h1 { font-size:2.1rem; }
+    .trip .t { font-size:1.6rem; } [class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:none; padding-left:0;
+    border-top:2px dashed var(--line); padding-top:.8rem; margin-top:.6rem; } }
 </style>
 """
 
@@ -190,15 +204,29 @@ def clock(hhmm: str) -> str:
     return f"{(h % 12) or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
 
 
-def header(title: str) -> None:
+ROUTE_SVG = (
+    "<svg class='route' viewBox='0 0 720 64' aria-hidden='true' focusable='false'>"
+    "<line x1='20' y1='24' x2='700' y2='24' stroke='#4fa58d' stroke-width='4'/>"
+    "<line x1='20' y1='24' x2='700' y2='24' stroke='#0e2b26' stroke-width='2' stroke-dasharray='2 14'/>"
+    + "".join(f"<circle cx='{x}' cy='24' r='{r}' fill='{c}' stroke='#fff' stroke-width='3'/>"
+              f"<text x='{x}' y='56' fill='#d7e8e3' font-size='15' text-anchor='{a}' "
+              f"font-family='Atkinson Hyperlegible, sans-serif'>{n}</text>"
+              for x, r, c, a, n in [(20, 9, "#b3265e", "start", "Seward"), (190, 6, "#fff", "middle", "Anchorage"),
+                                    (360, 6, "#fff", "middle", "Talkeetna"), (530, 6, "#fff", "middle", "Denali"),
+                                    (700, 9, "#b3265e", "end", "Fairbanks")])
+    + "</svg>")
+
+
+def header(title: str, show_route: bool = False) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     # Ask browsers and dark mode extensions not to restyle this page (it is designed in light colors)
     st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
             "['color-scheme:light','darkreader-lock:'].forEach(function(x){var m=d.createElement('meta');"
             "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
+    route = ROUTE_SVG if show_route else ""
     st.markdown(
-        f"""<div class="topband"><div class="brand">🚆 Rural Travel Co-op</div>
-        <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>
+        f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
+        <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>{route}
         <div class="notice">Unofficial research prototype. Alaska Railroad times and fares are copied from its
         public schedule and it is not a partner. Trips marked demo are made up. Always confirm with the
         operator before you buy.</div></div>""", unsafe_allow_html=True)
@@ -292,7 +320,7 @@ def report_panel() -> None:
 
 
 def search_screen() -> None:
-    header("Find your way between small towns")
+    header("Find your way between small towns", show_route=True)
     cities = api_get("/cities")
     if not cities:
         return
