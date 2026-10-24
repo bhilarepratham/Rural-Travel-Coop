@@ -55,4 +55,29 @@ assert c.post("/members", json={"email": "a@b.com", "tier": 3}).status_code == 4
 assert c.post("/members", json={"email": " A@B.com ", "tier": 1}).json()["status"] == "created"
 assert c.post("/members", json={"email": "a@b.com", "tier": 2}).json()["status"] == "updated"
 assert c.get("/members/count").json() == {"tier1": 0, "tier2": 1, "total": 1}
+# partner weekly reports (Day 4)
+good = {"operator": "Alaska Railroad", "week_start": "2027-06-07", "route_label": "Anchorage to Seward",
+        "partner_sales_total": 20000, "tagged_tickets": 12, "tagged_value": 1600}
+assert c.post("/partner-reports", json=good).json()["status"] == "created"
+assert c.post("/partner-reports", json={**good, "tagged_value": 1800}).json()["status"] == "updated"   # same week and route
+assert c.post("/partner-reports", json={**good, "route_label": "Anchorage to Talkeetna", "partner_sales_total": 10000,
+                                         "tagged_tickets": 3, "tagged_value": 500}).json()["status"] == "created"
+assert c.post("/partner-reports", json={**good, "operator": "Nobody"}).status_code == 404
+assert c.post("/partner-reports", json={**good, "partner_sales_total": 0}).status_code == 422
+assert c.post("/partner-reports", json={**good, "tagged_value": 99999}).status_code == 422
+assert c.post("/partner-reports", json={**good, "week_start": "not a date"}).status_code == 422
+pr = c.get("/partner-reports").json()
+assert len(pr["rows"]) == 2 and pr["rows"][0]["capture_rate"] == 0.09, pr["rows"][0]
+sm = pr["summary"]
+assert sm["partner_sales_total"] == 30000 and sm["tagged_value"] == 2300 and sm["capture_rate"] == 0.0767, sm
+assert sm["decision"].startswith("Preliminary") and "5.5% to 9%" in sm["decision"], sm
+assert c.get("/partner-reports", params={"operator": "Sample Coach Lines"}).json()["rows"] == []
+# staff key (only enforced when ADMIN_KEY is set)
+main.ADMIN_KEY = "secret"
+assert c.get("/partner-reports").status_code == 401
+assert c.post("/partner-reports", json=good).status_code == 401
+assert c.get("/partner-reports", headers={"X-Admin-Key": "wrong"}).status_code == 401
+assert c.get("/partner-reports", headers={"X-Admin-Key": "secret"}).status_code == 200
+assert c.post("/partner-reports", json=good, headers={"X-Admin-Key": "secret"}).json()["status"] == "updated"
+main.ADMIN_KEY = ""
 print("ALL TESTS PASSED", "postgres" if main.USE_POSTGRES else "sqlite")
