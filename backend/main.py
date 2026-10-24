@@ -15,8 +15,8 @@ from pathlib import Path
 from datetime import date
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 
 import arr_data
 from data import TRIPS
@@ -336,3 +336,110 @@ def member_count() -> dict:
     db.close()
     counts = {r["tier"]: r["n"] for r in rows}
     return {"tier1": counts.get(1, 0), "tier2": counts.get(2, 0), "total": sum(counts.values())}
+
+
+# ---------------------------------------------------------------------------------------------
+# Week 9 Day 4: weekly numbers the partner reports during the pilot, and the capture rate.
+# Capture rate = value of tickets that carried our tracking code / the partner's total sales on the
+# same routes and weeks. Decision bands come from the Week 8 pilot design.
+# ---------------------------------------------------------------------------------------------
+GO_RATE = 0.09          # 9% or more: go
+EXTEND_RATE = 0.055     # 5.5% to 9%: extend and cut costs. Below 5.5%: stop or change the model.
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "").strip()   # if set, partner numbers need this key
+PILOT_WEEKS = 12
+PILOT_MIN_TICKETS = 100
+
+
+class PartnerReport(BaseModel):
+    operator: str
+    week_start: date
+    route_label: str = Field(min_length=1)
+    partner_sales_total: float = Field(gt=0)
+    tagged_tickets: int = Field(default=0, ge=0)
+    tagged_value: float = Field(default=0, ge=0)
+    notes: str = ""
+
+
+def decision_band(rate: float, weeks: int, tickets: int) -> str:
+    if rate >= GO_RATE:
+        band = "Go (9% or more)"
+    elif rate >= EXTEND_RATE:
+        band = "Extend the pilot and cut costs (5.5% to 9%)"
+    else:
+        band = "Stop or change the model (below 5.5%)"
+    if weeks < PILOT_WEEKS or tickets < PILOT_MIN_TICKETS:
+        return f"Preliminary, not a decision yet: {band}"
+    return band
+
+
+def require_admin(x_admin_key: str = Header(default="")) -> None:
+    """Staff only. If ADMIN_KEY is not set (local testing), anyone may call."""
+    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="Staff key missing or wrong")
+
+
+@app.post("/partner-reports", dependencies=[Depends(require_admin)])
+def save_partner_report(rep: PartnerReport) -> dict:
+    """Staff entry: one row per operator, week and route label. Sending the same one again updates it."""
+    if rep.tagged_value > rep.partner_sales_total:
+        raise HTTPException(status_code=422,
+                            detail="Tagged value cannot be more than the partner's total sales")
+    if rep.tagged_tickets == 0 and rep.tagged_value > 0:
+        raise HTTPException(status_code=422, detail="Tagged value needs at least one tagged ticket")
+    db = get_db()
+    op = db.execute("SELECT id FROM operators WHERE name = ?", (rep.operator,)).fetchone()
+    if op is None:
+        db.close()
+        raise HTTPException(status_code=404, detail="Unknown operator")
+    existing = db.execute(
+        "SELECT id FROM partner_weekly_reports WHERE operator_id = ? AND week_start = ? AND route_label = ?",
+        (op["id"], rep.week_start.isoformat(), rep.route_label.strip())).fetchone()
+    values = (rep.partner_sales_total, rep.tagged_tickets, rep.tagged_value, rep.notes)
+    if existing:
+        db.execute("UPDATE partner_weekly_reports SET partner_sales_total = ?, tagged_tickets = ?, "
+                   "tagged_value = ?, notes = ? WHERE id = ?", values + (existing["id"],))
+        report_id, status = existing["id"], "updated"
+    else:
+        report_id = db.insert(
+            "INSERT INTO partner_weekly_reports (operator_id, week_start, route_label, partner_sales_total, "
+            "tagged_tickets, tagged_value, notes) VALUES (?,?,?,?,?,?,?)",
+            (op["id"], rep.week_start.isoformat(), rep.route_label.strip()) + values)
+        status = "created"
+    db.commit()
+    db.close()
+    return {"id": report_id, "status": status}
+
+
+@app.get("/partner-reports", dependencies=[Depends(require_admin)])
+def partner_reports(operator: Optional[str] = Query(None)) -> dict:
+    """All weekly rows with each week's capture rate, plus the running total and decision band."""
+    sql = ("SELECT r.id, o.name AS operator, r.week_start, r.route_label, r.partner_sales_total, "
+           "r.tagged_tickets, r.tagged_value, r.notes FROM partner_weekly_reports r "
+           "JOIN operators o ON o.id = r.operator_id")
+    params: tuple = ()
+    if operator:
+        sql += " WHERE o.name = ?"
+        params = (operator,)
+    sql += " ORDER BY r.week_start, o.name, r.route_label"
+    db = get_db()
+    rows = db.execute(sql, params).fetchall()
+    db.close()
+    out, sales, value, tickets, weeks = [], 0.0, 0.0, 0, set()
+    for r in rows:
+        s_total, t_value = float(r["partner_sales_total"]), float(r["tagged_value"])
+        sales += s_total
+        value += t_value
+        tickets += int(r["tagged_tickets"])
+        weeks.add(str(r["week_start"]))
+        out.append({"id": r["id"], "operator": r["operator"], "week_start": str(r["week_start"]),
+                    "route_label": r["route_label"], "partner_sales_total": s_total,
+                    "tagged_tickets": int(r["tagged_tickets"]), "tagged_value": t_value,
+                    "capture_rate": round(t_value / s_total, 4) if s_total else None,
+                    "notes": r["notes"] or ""})
+    summary = {"weeks_reported": len(weeks), "partner_sales_total": round(sales, 2),
+               "tagged_tickets": tickets, "tagged_value": round(value, 2),
+               "capture_rate": round(value / sales, 4) if sales else None,
+               "fee_value": round(value * FEE_RATE, 2),
+               "decision": decision_band(value / sales, len(weeks), tickets) if sales else "No data yet",
+               "note": "Tagged sales are a floor: some buyers click through but book later without the code."}
+    return {"rows": out, "summary": summary}
