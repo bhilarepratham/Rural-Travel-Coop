@@ -35,6 +35,34 @@ html, body, [class*="css"], .stApp { font-family:'Public Sans', system-ui, sans-
 .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"],
 .stApp input { background-color:#eef2f7 !important; color:var(--ink) !important; }
 .stApp [data-baseweb="select"] svg { fill:var(--ink); }
+/* date, number and text inputs, including their inner wrappers */
+.stApp [data-testid="stDateInput"] div, .stApp [data-testid="stDateInput"] input,
+.stApp [data-testid="stNumberInput"] div, .stApp [data-testid="stNumberInput"] input,
+.stApp [data-testid="stTextInput"] div, .stApp [data-testid="stTextInput"] input
+    { background-color:#eef2f7 !important; color:var(--ink) !important; -webkit-text-fill-color:var(--ink) !important; }
+.stApp [data-testid="stDateInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stDateInput"] [data-testid="stWidgetLabel"] div,
+.stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"] div,
+.stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"] div
+    { background-color:transparent !important; }
+.stApp [data-testid="stNumberInput"] button { background-color:#e1e8f1 !important; color:var(--ink) !important; }
+.stApp [data-testid="stNumberInput"] button svg { fill:var(--ink) !important; }
+.stApp input::placeholder { color:var(--muted) !important; -webkit-text-fill-color:var(--muted) !important; }
+/* dropdown menus and calendar pop-ups */
+[data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul, [data-baseweb="calendar"],
+[data-baseweb="calendar"] div { background-color:#fff !important; color:var(--ink) !important; }
+[data-baseweb="popover"] li { background-color:#fff !important; color:var(--ink) !important; }
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] { background-color:#e5eefb !important; }
+/* secondary buttons (Join the co-op, Back, etc.) */
+.stApp .stButton button:not([kind="primary"]), .stApp .stDownloadButton button, .stApp .stLinkButton a:not([kind="primary"])
+    { background-color:#fff !important; color:var(--ink) !important; border:1px solid var(--blue) !important; }
+.stApp .stButton button:not([kind="primary"]) p, .stApp .stLinkButton a:not([kind="primary"]) p { color:var(--ink) !important; }
+.stApp .stButton button:not([kind="primary"]):hover { background-color:#e5eefb !important; }
+.stApp .stButton button[kind="primary"] p, .stApp .stLinkButton a[kind="primary"] p,
+.stApp [data-testid="stFormSubmitButton"] button p { color:#fff !important; }
+/* expander, radios, checkboxes, tabs */
+.stApp [data-testid="stExpander"] details, .stApp [data-testid="stExpander"] summary { background-color:transparent !important; color:var(--ink) !important; }
+.stApp [data-baseweb="tab"] { color:var(--ink) !important; background:transparent !important; }
+.stApp [data-baseweb="checkbox"] span, .stApp [data-baseweb="radio"] div { border-color:#7b8da3; }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility:hidden; height:0; }
 .block-container { padding-top:0 !important; max-width:1180px; }
 
