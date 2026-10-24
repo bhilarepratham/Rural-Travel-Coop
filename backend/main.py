@@ -175,18 +175,43 @@ setup_database()
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    # Says which database is in use, so you can tell if DATABASE_URL was picked up.
+    # "postgres" means Neon. "sqlite" means the temporary local file, which is wiped on every Render restart.
+    return {"status": "ok", "database": "postgres" if USE_POSTGRES else "sqlite"}
 
 
-@app.get("/cities")
-def cities() -> list[str]:
-    """Every place that appears in an active trip, in alphabetical order."""
+# Which region each place belongs to. Add a row here when a new pilot region is added.
+REGION_OF = {
+    "Anchorage": "Alaska", "Denali": "Alaska", "Fairbanks": "Alaska", "Girdwood": "Alaska", "Healy": "Alaska",
+    "Hurricane": "Alaska", "Seward": "Alaska", "Talkeetna": "Alaska", "Wasilla": "Alaska", "Whittier": "Alaska",
+}
+
+
+def active_cities() -> list[str]:
     db = get_db()
     rows = db.execute("SELECT origin AS city FROM trips WHERE is_active = ? UNION "
                       "SELECT destination AS city FROM trips WHERE is_active = ?",
                       (True, True)).fetchall()
     db.close()
     return sorted(r["city"] for r in rows)
+
+
+@app.get("/regions")
+def regions() -> list[dict]:
+    """Regions that have at least one active trip, each with its places (alphabetical)."""
+    out: dict[str, list[str]] = {}
+    for city in active_cities():
+        out.setdefault(REGION_OF.get(city, "Other"), []).append(city)
+    return [{"name": name, "cities": cs} for name, cs in sorted(out.items())]
+
+
+@app.get("/cities")
+def cities(region: Optional[str] = None) -> list[str]:
+    """Every place that appears in an active trip, in alphabetical order. Optional region filter."""
+    cs = active_cities()
+    if region:
+        cs = [c for c in cs if REGION_OF.get(c, "Other") == region]
+    return cs
 
 
 def season_status(start, end, on: Optional[date]) -> Optional[bool]:
