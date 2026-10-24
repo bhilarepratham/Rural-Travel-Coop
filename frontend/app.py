@@ -105,10 +105,20 @@ def go(step: str) -> None:
     st.session_state.step = step
 
 
-def api_get(path: str, params: dict | None = None):
+try:
+    ADMIN_KEY = st.secrets["ADMIN_KEY"]
+except Exception:
+    ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+STAFF = {"X-Admin-Key": ADMIN_KEY} if ADMIN_KEY else {}
+
+
+def api_get(path: str, params: dict | None = None, staff: bool = False):
     """Call the backend. Returns the JSON, or None if the backend cannot be reached."""
     try:
-        r = requests.get(f"{BACKEND_URL}{path}", params=params, timeout=30)
+        r = requests.get(f"{BACKEND_URL}{path}", params=params, timeout=30, headers=STAFF if staff else None)
+        if r.status_code == 401:
+            st.warning("Staff key missing or wrong. Add ADMIN_KEY to the Streamlit secrets.")
+            return None
         r.raise_for_status()
         return r.json()
     except requests.RequestException as e:
@@ -117,10 +127,13 @@ def api_get(path: str, params: dict | None = None):
         return None
 
 
-def api_post(path: str, body: dict | None = None):
+def api_post(path: str, body: dict | None = None, staff: bool = False):
     """Send data to the backend. Returns the JSON, or None if the call failed."""
     try:
-        r = requests.post(f"{BACKEND_URL}{path}", json=body, timeout=30)
+        r = requests.post(f"{BACKEND_URL}{path}", json=body, timeout=30, headers=STAFF if staff else None)
+        if r.status_code == 401:
+            st.warning("Staff key missing or wrong. Add ADMIN_KEY to the Streamlit secrets.")
+            return None
         if r.status_code == 422:
             # The backend rejected the input (for example a bad email). Show its plain message.
             detail = r.json().get("detail", "Please check what you entered.")
@@ -183,22 +196,71 @@ def search_bar(cities: list[str]) -> None:
         st.rerun()
 
 
+def click_tab() -> None:
+    sales = st.number_input("Partner ticket sales for the same routes and weeks ($, optional)",
+                            min_value=0.0, value=0.0, step=100.0)
+    report = api_get("/clicks/report", {"partner_sales": sales} if sales > 0 else None)
+    if not report:
+        return
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Clicks", report["total_clicks"])
+    m2.metric("Bookings", report["total_bookings"])
+    m3.metric("Capture rate", f"{report['capture_rate']:.1%}" if "capture_rate" in report else "n/a")
+    if report["operators"]:
+        st.dataframe(report["operators"], width="stretch")
+    else:
+        st.caption("No clicks yet. Select a trip first.")
+
+
+def partner_tab() -> None:
+    """Weekly numbers the partner sends us, and the capture rate they produce."""
+    operators = ["Alaska Railroad"]
+    with st.form("partner_form", border=True):
+        st.markdown("**Enter this week's partner numbers**")
+        c1, c2 = st.columns(2)
+        operator = c1.selectbox("Operator", operators)
+        week = c2.date_input("Week starting (Monday)", value=date(2027, 6, 7))
+        route = st.text_input("Routes covered", value="Anchorage to Seward")
+        c3, c4, c5 = st.columns(3)
+        total = c3.number_input("Partner total ticket sales ($)", min_value=0.0, step=100.0)
+        tickets = c4.number_input("Tickets with our tracking code", min_value=0, step=1)
+        value = c5.number_input("Value of those tickets ($)", min_value=0.0, step=50.0)
+        notes = st.text_input("Notes (optional)")
+        if st.form_submit_button("Save week", type="primary"):
+            saved = api_post("/partner-reports", {
+                "operator": operator, "week_start": week.isoformat(), "route_label": route,
+                "partner_sales_total": total, "tagged_tickets": int(tickets),
+                "tagged_value": value, "notes": notes}, staff=True)
+            if saved:
+                st.success(f"Week {saved['status']}.")
+    data = api_get("/partner-reports", staff=True)
+    if not data or not data["rows"]:
+        st.caption("No partner numbers yet. Enter the first week above.")
+        return
+    sm = data["summary"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Weeks reported", f"{sm['weeks_reported']} of 12")
+    m2.metric("Tagged tickets", sm["tagged_tickets"])
+    m3.metric("Capture rate so far", f"{sm['capture_rate']:.1%}" if sm["capture_rate"] is not None else "n/a")
+    st.info(f"{sm['decision']}. {sm['note']}")
+    st.dataframe(data["rows"], width="stretch", hide_index=True)
+    weekly = {}
+    for r in data["rows"]:
+        w = weekly.setdefault(r["week_start"], [0.0, 0.0])
+        w[0] += r["partner_sales_total"]
+        w[1] += r["tagged_value"]
+    st.caption("Capture rate by week (decision lines: 5.5% and 9%)")
+    st.bar_chart({k: v[1] / v[0] for k, v in sorted(weekly.items()) if v[0] > 0}, height=200)
+
+
 def report_panel() -> None:
-    """Staff view for the pilot: clicks, bookings and the capture rate."""
-    with st.expander("Pilot click report (staff view)"):
-        sales = st.number_input("Partner ticket sales for the same routes and weeks ($, optional)",
-                                min_value=0.0, value=0.0, step=100.0)
-        report = api_get("/clicks/report", {"partner_sales": sales} if sales > 0 else None)
-        if not report:
-            return
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Clicks", report["total_clicks"])
-        m2.metric("Bookings", report["total_bookings"])
-        m3.metric("Capture rate", f"{report['capture_rate']:.1%}" if "capture_rate" in report else "n/a")
-        if report["operators"]:
-            st.dataframe(report["operators"], width="stretch")
-        else:
-            st.caption("No clicks yet. Select a trip first.")
+    """Staff view for the pilot: clicks, bookings, partner weekly numbers and the capture rate."""
+    with st.expander("Pilot report (staff view)"):
+        tab1, tab2 = st.tabs(["Clicks and bookings", "Partner weekly numbers"])
+        with tab1:
+            click_tab()
+        with tab2:
+            partner_tab()
 
 
 def search_screen() -> None:
@@ -334,6 +396,11 @@ def handoff_screen() -> None:
         st.markdown(f"## ${t['price'] * q['riders']:,.0f}")
         st.caption(f"${t['price']:,.0f} x {q['riders']} rider(s). Fare shown by the operator; taxes and fees "
                    "may apply on their site.")
+        if t["partner"]:
+            st.caption("Disclosure: the co-op may receive a referral fee from this operator if you buy. "
+                       "It does not change your price.")
+        else:
+            st.caption("The co-op earns no fee from this trip.")
         ref = f"coop-{t['id']}"
         link = f"{t['url']}?{urlencode({'ref': ref})}"
         if st.session_state.get("click_id") is None:
