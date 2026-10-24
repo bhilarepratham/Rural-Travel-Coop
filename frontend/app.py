@@ -138,7 +138,7 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 
 if "step" not in st.session_state:
     st.session_state.step = "search"
-    st.session_state.query = {"from": "Anchorage", "to": "Seward", "date": DEFAULT_DATE, "riders": 1}
+    st.session_state.query = {"from": "Anchorage", "to": "Seward", "date": DEFAULT_DATE, "riders": 1, "region": "Alaska"}
     st.session_state.selected = None
     st.session_state.click_id = None
 
@@ -217,7 +217,7 @@ ROUTE_SVG = (
     + "</svg>")
 
 
-def header(title: str, show_route: bool = False) -> None:
+def header(title: str, show_route: bool = False, region: str = "") -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     # Ask browsers and dark mode extensions not to restyle this page (it is designed in light colors)
     st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
@@ -226,20 +226,24 @@ def header(title: str, show_route: bool = False) -> None:
     route = ROUTE_SVG if show_route else ""
     st.markdown(
         f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
-        <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>{route}
+        <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
         <div class="notice">Unofficial research prototype. Alaska Railroad times and fares are copied from its
         public schedule and it is not a partner. Trips marked demo are made up. Always confirm with the
         operator before you buy.</div></div>""", unsafe_allow_html=True)
 
 
-def search_bar(cities: list[str]) -> None:
-    """Search bar shown on the search and results screens."""
+def search_bar(regions: list[dict]) -> None:
+    """Search bar shown on the search and results screens. Step 1 is the region, then the two places in it."""
     q = st.session_state.query
+    names = [r["name"] for r in regions]
     with st.container(key="searchbar"):
+        region = st.selectbox("Where are you travelling?", names,
+                              index=names.index(q["region"]) if q.get("region") in names else 0)
+        cities = next(r["cities"] for r in regions if r["name"] == region)
         with st.form("search_form", border=False):
             c1, c2, c3, c4, c5 = st.columns([2, 2, 1.7, 1, 1.4])
             origin = c1.selectbox("From", cities, index=cities.index(q["from"]) if q["from"] in cities else 0)
-            dest = c2.selectbox("To", cities, index=cities.index(q["to"]) if q["to"] in cities else 1)
+            dest = c2.selectbox("To", cities, index=cities.index(q["to"]) if q["to"] in cities else min(1, len(cities) - 1))
             when = c3.date_input("Date", value=q["date"])
             riders = c4.number_input("Riders", min_value=1, max_value=10, value=q["riders"])
             submitted = c5.form_submit_button("Search", type="primary", width="stretch")
@@ -247,7 +251,7 @@ def search_bar(cities: list[str]) -> None:
         if origin == dest:
             st.warning("Choose two different places.")
             return
-        st.session_state.query = {"from": origin, "to": dest, "date": when, "riders": riders}
+        st.session_state.query = {"region": region, "from": origin, "to": dest, "date": when, "riders": riders}
         go("results")
         st.rerun()
 
@@ -321,10 +325,10 @@ def report_panel() -> None:
 
 def search_screen() -> None:
     header("Find your way between small towns", show_route=True)
-    cities = api_get("/cities")
-    if not cities:
+    regions = api_get("/regions")
+    if not regions:
         return
-    search_bar(cities)
+    search_bar(regions)
     st.write("")
     c1, c2, c3 = st.columns(3)
     for col, title, text in [
@@ -349,11 +353,11 @@ def part_of_day(hhmm: str) -> str:
 
 def results_screen() -> None:
     q = st.session_state.query
-    header(f"{q['from']} to {q['to']}")
-    cities = api_get("/cities")
-    if not cities:
+    header(f"{q['from']} to {q['to']}", region=q.get("region", ""))
+    regions = api_get("/regions")
+    if not regions:
         return
-    search_bar(cities)
+    search_bar(regions)
     st.write("")
 
     trips = api_get("/trips", {"origin": q["from"], "destination": q["to"], "on": q["date"].isoformat()})
