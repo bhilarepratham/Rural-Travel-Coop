@@ -76,6 +76,8 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 .stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] div { color:var(--ink) !important; }
 .stApp [data-testid="stMetric"] * { color:var(--ink) !important; }
 .st-key-summary, .st-key-pricebox, .st-key-tier1, .st-key-tier2 { margin-top:1.4rem; }
+.st-key-whatis { background:#fff; border:1px solid var(--line); border-left:5px solid var(--fire); border-radius:6px; padding:1rem 1.2rem; margin:1rem 0; }
+.st-key-whatis h3 { font-size:1.6rem; margin:0 0 .3rem; }
 .st-key-tier1, .st-key-tier2 { min-height:9.5rem; }
 .stApp [data-testid="stTextInput"] [data-baseweb="base-input"] { border:1px solid #8fa9a3; border-radius:4px; }
 .st-key-summary h3, .st-key-tier1 h3, .st-key-tier2 h3 { font-size:1.9rem; }
@@ -226,7 +228,7 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
     route = ROUTE_SVG if show_route else ""
     st.markdown(
         f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
-        <div class="tag">Compare rail and bus in one search</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
+        <div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
         <div class="notice">Unofficial research prototype. Alaska Railroad times and fares are copied from its
         public schedule and it is not a partner. Trips marked demo are made up. Always confirm with the
         operator before you buy.</div></div>""", unsafe_allow_html=True)
@@ -334,11 +336,16 @@ def search_screen() -> None:
     for col, title, text in [
             (c1, "Rail and bus together", "See trains and buses for the same trip, sorted by price or time."),
             (c2, "You book with the operator", "We send you to the operator's own site. Refunds follow their rules."),
-            (c3, "Free to use", "No account needed. Join the co-op to vote and share in patronage dividends.")]:
+            (c3, "Free to use", "No account needed. Searching and comparing cost nothing.")]:
         with col.container(border=True):
             st.markdown(f"**{title}**")
             st.caption(text)
-    st.button("Join the co-op", on_click=go, args=("join",))
+    with st.container(key="whatis"):
+        st.markdown("### What is a co-op?")
+        st.write("A co-op (short for cooperative) is a business owned by the people who use it. Instead of profit "
+                 "going to outside investors, members vote on decisions and any profit is shared back with them, "
+                 "based on how much they used the service. Joining is optional.")
+        st.button("Become a member", on_click=go, args=("join",))
     report_panel()
 
 
@@ -373,7 +380,7 @@ def results_screen() -> None:
         times = st.multiselect("Departure time", ["Morning (before noon)", "Afternoon (noon to 5 PM)",
                                                   "Evening (after 5 PM)"])
         only_date = st.checkbox("Only trips that run on my date", value=False)
-        only_partner = st.checkbox("Co-op partners only", value=False)
+        only_partner = st.checkbox("Partner operators only", value=False)
 
     shown = [t for t in trips
              if (mode == "Rail and bus" or t["mode"] == ("Rail" if mode == "Rail only" else "Bus"))
@@ -408,7 +415,7 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
     if is_fastest:
         badges.append(badge("Fastest", "fast"))
     badges.append(badge("Demo data, made up", "warn") if t["sample"] else badge("Published schedule, unofficial"))
-    badges.append(badge("Co-op partner", "good") if t["partner"] else badge("Listed only"))
+    badges.append(badge("Partner operator", "good") if t["partner"] else badge("Listed only"))
     if t.get("in_season") is True:
         badges.append(badge("Runs on your date", "good"))
     elif t.get("in_season") is False:
@@ -457,10 +464,10 @@ def handoff_screen() -> None:
         st.caption(f"${t['price']:,.0f} x {q['riders']} rider(s). Fare shown by the operator; taxes and fees "
                    "may apply on their site.")
         if t["partner"]:
-            st.caption("Disclosure: the co-op may receive a referral fee from this operator if you buy. "
+            st.caption("Disclosure: we may receive a referral fee from this operator if you buy. "
                        "It does not change your price.")
         else:
-            st.caption("The co-op earns no fee from this trip.")
+            st.caption("We earn no fee from this trip.")
         ref = f"coop-{t['id']}"
         link = f"{t['url']}?{urlencode({'ref': ref})}"
         if st.session_state.get("click_id") is None:
@@ -479,29 +486,29 @@ def handoff_screen() -> None:
         st.caption(f"Link includes our tracking code: {ref}")
     c1, c2, _ = st.columns([1, 1, 2])
     c1.button("Back to results", on_click=go, args=("results",), width="stretch")
-    c2.button("Join the co-op", on_click=go, args=("join",), width="stretch")
+    c2.button("Become a member", on_click=go, args=("join",), width="stretch")
 
 
 def join_screen() -> None:
-    header("Join the co-op")
+    header("Become a member")
     c1, c2 = st.columns(2, gap="large")
     with c1.container(key="tier1"):
-        st.markdown("### Tier 1: Free")
-        st.write("Search, compare and book with any listed operator. No account needed.")
+        st.markdown("### Free member")
+        st.write("Get updates about new routes. Searching and comparing are free for everyone, member or not.")
     with c2.container(key="tier2"):
-        st.markdown("### Tier 2: Paid member")
-        st.write("Vote on co-op decisions and share in patronage dividends.")
+        st.markdown("### Paying member")
+        st.write("Vote on decisions and receive a share of any profit, based on how much you travel with us.")
     st.write("")
-    tier = st.radio("Choose a membership", ["Tier 1 (free)", "Tier 2 (paid)"], horizontal=True)
+    tier = st.radio("Choose a membership", ["Free member", "Paying member"], horizontal=True)
     email = st.text_input("Email")
-    st.caption("Prototype: no payment is taken. Tier 2 is recorded as interest only.")
+    st.caption("This is a prototype: no payment is taken. Paying membership is recorded as interest only.")
     if st.button("Join", type="primary"):
-        saved = api_post("/members", {"email": email, "tier": 1 if tier.startswith("Tier 1") else 2})
+        saved = api_post("/members", {"email": email, "tier": 1 if tier.startswith("Free") else 2})
         if saved:
-            st.success(f"Thanks. {saved['email']} is now on the list for Tier {saved['tier']} ({saved['status']}).")
+            st.success(f"Thanks. {saved['email']} is on the list as a {'free' if saved['tier'] == 1 else 'paying'} member ({saved['status']}).")
     counts = api_get("/members/count")
     if counts:
-        st.caption(f"Sign ups so far: {counts['total']} (Tier 1: {counts['tier1']}, Tier 2: {counts['tier2']})")
+        st.caption(f"Sign ups so far: {counts['total']} ({counts['tier1']} free, {counts['tier2']} paying)")
     st.button("Start a new search", on_click=go, args=("search",))
 
 
