@@ -21,7 +21,7 @@ except Exception:
     BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 BACKEND_URL = BACKEND_URL.rstrip("/")
 
-DEFAULT_DATE = date(2027, 7, 15)   # most listed Alaska Railroad trains run in summer 2027
+DEFAULT_DATE = date.today()   # the search opens on today; summer trains need a May to September date
 
 CSS = """
 <style>
@@ -244,7 +244,7 @@ def search_bar(regions: list[dict]) -> None:
             c1, c2, c3, c4, c5 = st.columns([2, 2, 1.7, 1, 1.4])
             origin = c1.selectbox("From", cities, index=cities.index(q["from"]) if q["from"] in cities else 0)
             dest = c2.selectbox("To", cities, index=cities.index(q["to"]) if q["to"] in cities else min(1, len(cities) - 1))
-            when = c3.date_input("Date", value=q["date"])
+            when = c3.date_input("Date", value=max(q["date"], date.today()), min_value=date.today())
             riders = c4.number_input("Riders", min_value=1, max_value=10, value=q["riders"])
             submitted = c5.form_submit_button("Search", type="primary", width="stretch")
     if submitted:
