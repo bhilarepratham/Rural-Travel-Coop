@@ -19,6 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import arr_data
+import gobus_data
 from data import TRIPS
 
 app = FastAPI(title="Rural Travel Co-op API (prototype)")
@@ -76,7 +77,8 @@ CREATE TABLE IF NOT EXISTS trips (
     origin TEXT NOT NULL, destination TEXT NOT NULL, depart_time TEXT NOT NULL,
     arrive_time TEXT NOT NULL, price REAL NOT NULL, days_running TEXT, season_start TEXT,
     season_end TEXT, booking_url TEXT, source_url TEXT, last_updated TEXT DEFAULT CURRENT_DATE,
-    is_sample INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1);
+    is_sample INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
+    fare_estimated INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS clicks (
     id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL,
     trip_id INTEGER NOT NULL REFERENCES trips(id), riders INTEGER NOT NULL DEFAULT 1,
@@ -110,8 +112,11 @@ def setup_database() -> None:
         cols = [r["name"] for r in db.execute("PRAGMA table_info(trips)").fetchall()]
         if "is_active" not in cols:
             db.execute("ALTER TABLE trips ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        if "fare_estimated" not in cols:
+            db.execute("ALTER TABLE trips ADD COLUMN fare_estimated INTEGER NOT NULL DEFAULT 0")
     seed_demo_trips(db)
     load_arr_trips(db)
+    load_gobus_trips(db)
     db.commit()
     db.close()
 
@@ -170,6 +175,32 @@ def load_arr_trips(db: Db) -> None:
                  op["booking_url"], arr_data.SCHEDULE_URL, arr_data.CHECKED, False, True))
 
 
+def load_gobus_trips(db: Db) -> None:
+    """Load the unofficial GoBus (Ohio) Red Line list. Same upsert rules as the railroad list.
+    Fares here are estimates (see gobus_data.py), so every row is flagged fare_estimated."""
+    op = gobus_data.OPERATOR
+    op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+    db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, op_id))
+    for (origin, dest, dep, arr, price, days, start, end) in gobus_data.GOBUS_TRIPS:
+        found = db.execute(
+            "SELECT id FROM trips WHERE operator_id = ? AND origin = ? AND destination = ? "
+            "AND depart_time = ? AND season_start = ?", (op_id, origin, dest, dep, start)).fetchone()
+        if found:
+            db.execute(
+                "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_end = ?, "
+                "booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, is_active = ?, "
+                "fare_estimated = ? WHERE id = ?",
+                (arr, price, days, end, op["booking_url"], gobus_data.SOURCE_URL, gobus_data.CHECKED,
+                 False, True, True, found["id"]))
+        else:
+            db.execute(
+                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                "price, days_running, season_start, season_end, booking_url, source_url, "
+                "last_updated, is_sample, is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (op_id, origin, dest, dep, arr, price, days, start, end, op["booking_url"],
+                 gobus_data.SOURCE_URL, gobus_data.CHECKED, False, True, True))
+
+
 setup_database()
 
 
@@ -184,6 +215,9 @@ def health() -> dict:
 REGION_OF = {
     "Anchorage": "Alaska", "Denali": "Alaska", "Fairbanks": "Alaska", "Girdwood": "Alaska", "Healy": "Alaska",
     "Hurricane": "Alaska", "Seward": "Alaska", "Talkeetna": "Alaska", "Wasilla": "Alaska", "Whittier": "Alaska",
+    "Toledo": "Ohio", "Bowling Green": "Ohio", "Findlay": "Ohio", "Lima": "Ohio", "Kenton": "Ohio",
+    "Bellefontaine": "Ohio", "Urbana": "Ohio", "Springfield": "Ohio", "Yellow Springs": "Ohio",
+    "Dayton": "Ohio", "Middletown": "Ohio", "Oxford": "Ohio", "Cincinnati": "Ohio",
 }
 
 
@@ -232,7 +266,7 @@ def search_trips(
     sql = ("SELECT t.id, t.origin, t.destination, t.depart_time, t.arrive_time, t.price, "
            "t.days_running, t.season_start, t.season_end, t.source_url, t.last_updated, "
            "COALESCE(t.booking_url, o.booking_url) AS url, o.name AS operator, o.mode, "
-           "o.is_partner, t.is_sample FROM trips t JOIN operators o ON o.id = t.operator_id "
+           "o.is_partner, t.is_sample, t.fare_estimated FROM trips t JOIN operators o ON o.id = t.operator_id "
            "WHERE t.is_active = ? AND lower(t.origin) = lower(?) AND lower(t.destination) = lower(?)")
     params = [True, origin, destination]
     if mode:
@@ -247,7 +281,7 @@ def search_trips(
              "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"],
              "arrive": r["arrive_time"], "price": float(r["price"]),
              "partner": bool(r["is_partner"]), "url": r["url"],
-             "sample": bool(r["is_sample"]), "days": r["days_running"],
+             "sample": bool(r["is_sample"]), "fare_estimated": bool(r["fare_estimated"]), "days": r["days_running"],
              "season_start": str(r["season_start"]) if r["season_start"] else None,
              "season_end": str(r["season_end"]) if r["season_end"] else None,
              "in_season": season_status(r["season_start"], r["season_end"], on),
