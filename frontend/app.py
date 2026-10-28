@@ -229,9 +229,9 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
     st.markdown(
         f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
         <div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
-        <div class="notice">Unofficial research prototype. Alaska Railroad times and fares are copied from its
-        public schedule and it is not a partner. Trips marked demo are made up. Always confirm with the
-        operator before you buy.</div></div>""", unsafe_allow_html=True)
+        <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
+        their public schedules, and neither is a partner. GoBus fares are estimates. Trips marked demo are
+        made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
 
 
 def search_bar(regions: list[dict]) -> None:
@@ -415,6 +415,8 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
     if is_fastest:
         badges.append(badge("Fastest", "fast"))
     badges.append(badge("Demo data, made up", "warn") if t["sample"] else badge("Published schedule, unofficial"))
+    if t.get("fare_estimated"):
+        badges.append(badge("Fare estimated", "warn"))
     badges.append(badge("Partner operator", "good") if t["partner"] else badge("Listed only"))
     if t.get("in_season") is True:
         badges.append(badge("Runs on your date", "good"))
@@ -431,7 +433,7 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
             <div><div class="t">{clock(t['arrive'])}</div><div class="place">{escape(t['to'])}</div></div></div>
             <div class="badges">{''.join(badges)}</div><div class="small">{escape(season)}</div>""",
             unsafe_allow_html=True)
-        b.markdown(f"""<div class="price"><div class="big">${t['price'] * riders:,.0f}</div>
+        b.markdown(f"""<div class="price"><div class="big">{"~" if t.get("fare_estimated") else ""}${t['price'] * riders:,.0f}</div>
             <div class="per">{f"${t['price']:,.0f} per rider, {riders} riders" if riders != 1 else "per rider"}</div></div>""",
                    unsafe_allow_html=True)
         if b.button("Select", key=f"book{t['id']}", type="primary", width="stretch"):
@@ -454,13 +456,16 @@ def handoff_screen() -> None:
             st.caption(f"{t['days']}. Season {t['season_start']} to {t['season_end']}.")
         if t.get("in_season") is False:
             st.warning("This trip does not run on the date you searched. Check the season before you buy.")
+        if t.get("fare_estimated"):
+            st.warning("This fare is an estimate. The operator publishes a fare range, not a fare for each pair of "
+                       "stops. Check the exact fare on the operator's site before you buy.")
         st.info("The operator sells and issues your ticket. Refunds and changes follow the operator's rules.")
         if t.get("source_url"):
             st.caption(f"Time and fare copied from the operator's public schedule (checked {t.get('last_updated')}). "
                        f"Confirm on the operator's site before you buy. Source: {t['source_url']}")
     with right.container(key="pricebox"):
         st.markdown("**Price**")
-        st.markdown(f"## ${t['price'] * q['riders']:,.0f}")
+        st.markdown(f"## {'~' if t.get('fare_estimated') else ''}${t['price'] * q['riders']:,.0f}")
         st.caption(f"${t['price']:,.0f} x {q['riders']} rider(s). Fare shown by the operator; taxes and fees "
                    "may apply on their site.")
         if t["partner"]:
@@ -502,8 +507,20 @@ def join_screen() -> None:
     tier = st.radio("Choose a membership", ["Free member", "Paying member"], horizontal=True)
     email = st.text_input("Email")
     st.caption("This is a prototype: no payment is taken. Paying membership is recorded as interest only.")
+    st.markdown("<div class='notice'><b>What we do with your email.</b> We save it, with the membership you chose "
+                "and the date, so the project team can tell you about the co-op. We do not sell it or share it, "
+                "and we send no advertising. We do not ask for your name, address or payment details.</div>",
+                unsafe_allow_html=True)
+    agreed = st.checkbox("I have read the privacy notice and the terms of use, and I agree to them.")
+    pc1, pc2, _ = st.columns([1, 1, 3])
+    pc1.button("Read privacy notice", on_click=open_legal, args=("privacy",), key="join_priv")
+    pc2.button("Read terms of use", on_click=open_legal, args=("terms",), key="join_terms")
     if st.button("Join", type="primary"):
-        saved = api_post("/members", {"email": email, "tier": 1 if tier.startswith("Free") else 2})
+        if not agreed:
+            st.warning("Please tick the box to confirm you have read the privacy notice and the terms.")
+            saved = None
+        else:
+            saved = api_post("/members", {"email": email, "tier": 1 if tier.startswith("Free") else 2})
         if saved:
             st.success(f"Thanks. {saved['email']} is on the list as a {'free' if saved['tier'] == 1 else 'paying'} member ({saved['status']}).")
     counts = api_get("/members/count")
@@ -512,6 +529,93 @@ def join_screen() -> None:
     st.button("Start a new search", on_click=go, args=("search",))
 
 
-{"search": search_screen, "results": results_screen, "handoff": handoff_screen, "join": join_screen}[
-    st.session_state.step
-]()
+def privacy_screen() -> None:
+    header("Privacy notice")
+    with st.container(key="legal"):
+        st.markdown("""
+**This is a research prototype. Here is what it saves and what it does not.**
+
+**What we save**
+- **Your email**, the membership you chose (free or paying) and the date, only if you join as a member.
+- **A record each time you press "Continue to operator site"**: which trip, how many riders, the price shown, and the time.
+  This record has no name, email or device details in it. We use it to count how many people were sent to an operator.
+
+**What we do not save**
+- No name, home address, phone number, or payment details.
+- Searches you run and trips you only look at are not stored.
+- We run no advertising and no tracking tools of our own.
+
+**How we use it**
+- To tell members about the co-op and new routes.
+- To count referrals so the project can measure whether the idea works.
+
+**Who sees it**
+- The project team. Your email is not sold, rented or shared with an operator or anyone else.
+- The data is kept with our hosting providers (the website, the server and the database). They store it for us.
+- If you leave our site for an operator's site, the operator's own privacy rules apply there.
+
+**How long we keep it**
+- Emails are kept while the prototype is being tested and are deleted when the project ends.
+
+**Your choices**
+- You can ask the project team to delete your email at any time. This prototype has no delete button yet, so
+  the team removes it by hand.
+- Joining is optional. You can search and compare trips without giving an email.
+""")
+    st.button("Back", on_click=go, args=(st.session_state.get("return_to", "search"),))
+
+
+def terms_screen() -> None:
+    header("Terms of use")
+    with st.container(key="legal"):
+        st.markdown("""
+**Please read this before you use the prototype.**
+
+**1. What this site is.** A research prototype that shows bus and train times and prices in one place. It is not a
+finished product and it may be wrong or unavailable.
+
+**2. We do not sell tickets.** We do not take your payment and we do not issue tickets. When you press
+"Continue to operator site" you leave this site, and you buy from the operator on its own site. Your ticket, its
+price, refunds and changes are decided by that operator, and the operator is responsible for them.
+
+**3. Times and prices can be wrong.** We copy them from public schedules, and the date we checked is shown on each
+trip. A fare marked with "~" or "Fare estimated" is our estimate, because the operator publishes a range and not a
+price for each pair of stops. Trips marked demo are made up. Always check the time, price and season on the
+operator's site before you buy.
+
+**4. No partnership.** Alaska Railroad and GoBus are not partners of this project and have not approved this site.
+Names are used only to say which service a trip belongs to.
+
+**5. Referral fees.** Where a trip says we may receive a referral fee, that fee does not change your price.
+
+**6. Membership.** Joining the list records interest only. No money is taken, and no vote, profit share or other
+right starts from signing up on this prototype.
+
+**7. Use it fairly.** Do not try to break the site or read other people's data.
+
+**8. No promise.** The site is offered as it is, for testing. To the extent the law allows, the project team is not
+responsible for losses that come from using it, including a missed trip caused by a wrong time or price.
+""")
+    c1, c2, _ = st.columns([1, 1.4, 2])
+    c1.button("Back", on_click=go, args=(st.session_state.get("return_to", "search"),), key="terms_back")
+    c2.button("Read privacy notice", on_click=go, args=("privacy",), key="terms_priv")
+
+
+def open_legal(page: str) -> None:
+    if st.session_state.step not in ("privacy", "terms"):
+        st.session_state.return_to = st.session_state.step
+    go(page)
+
+
+def footer() -> None:
+    if st.session_state.step in ("privacy", "terms"):
+        return
+    st.write("")
+    f1, f2, _ = st.columns([1, 1, 4])
+    f1.button("Privacy notice", on_click=open_legal, args=("privacy",), key="foot_priv", type="tertiary")
+    f2.button("Terms of use", on_click=open_legal, args=("terms",), key="foot_terms", type="tertiary")
+
+
+{"search": search_screen, "results": results_screen, "handoff": handoff_screen, "join": join_screen,
+ "privacy": privacy_screen, "terms": terms_screen}[st.session_state.step]()
+footer()
