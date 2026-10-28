@@ -28,10 +28,12 @@ CREATE TABLE IF NOT EXISTS trips (
     source_url    TEXT,
     last_updated  DATE NOT NULL DEFAULT CURRENT_DATE,
     is_sample     BOOLEAN NOT NULL DEFAULT FALSE,  -- true for made up demo rows
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE    -- false hides an old or replaced row without deleting it
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,   -- false hides an old or replaced row without deleting it
+    fare_estimated BOOLEAN NOT NULL DEFAULT FALSE  -- true when the price is an estimate, not a published fare
 );
 -- For databases created before Week 9 Day 3 (safe to run again):
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS fare_estimated BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS trips_route_idx ON trips (lower(origin), lower(destination));
 
 -- One row per press of "Continue to operator site".
