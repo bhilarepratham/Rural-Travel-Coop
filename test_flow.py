@@ -48,7 +48,7 @@ if "--after-restart" in sys.argv:
     print("\nAll persistence checks passed.")
     sys.exit(0)
 
-check(get("/health") == {"status": "ok"}, "backend is up")
+check(get("/health")["status"] == "ok", "backend is up")
 cities = get("/cities")
 check({"Anchorage", "Seward", "Fairbanks"} <= set(cities), f"{len(cities)} places listed")
 trips = get("/trips", params={"origin": "Anchorage", "destination": "Seward", "on": "2027-07-15"})
