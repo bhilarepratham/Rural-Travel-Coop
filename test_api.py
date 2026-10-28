@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from fastapi.testclient import TestClient
-import arr_data, main
+import arr_data, gobus_data, main
 
 # A leftover made up "Sample Railroad" trip from the old seed data, with a click on it
 db = main.get_db()
@@ -13,9 +13,26 @@ db.commit(); db.close()
 main.setup_database()           # the start up step: loads real data and hides the old sample rail trip
 
 c = TestClient(main.app)
-assert c.get("/health").json() == {"status": "ok"}
+assert c.get("/health").json()["status"] == "ok"
+regs = c.get("/regions").json()
+assert [r["name"] for r in regs] == ["Alaska", "Ohio"], regs
+assert "Anchorage" in regs[0]["cities"] and "Toledo" in regs[1]["cities"] and "Anchorage" not in regs[1]["cities"]
+assert "Anchorage" in c.get("/cities", params={"region": "Alaska"}).json()
+assert c.get("/cities", params={"region": "Nowhere"}).json() == []
 cities = c.get("/cities").json()
-assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Anchorage", "Seward"}), cities
+assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Anchorage", "Seward"}
+                        | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]}), cities
+assert c.get("/cities", params={"region": "Ohio"}).json() == sorted({x for t in gobus_data.GOBUS_TRIPS for x in t[:2]})
+
+# GoBus (Ohio): estimated fares are flagged and stay inside the published $5 to $25 range
+g = c.get("/trips", params={"origin": "Toledo", "destination": "Cincinnati", "on": "2027-01-15"}).json()
+assert len(g) == 2 and all(x["fare_estimated"] and x["operator"] == "GoBus (Ohio)" and x["in_season"] is True for x in g), g
+assert all(5 <= x["price"] <= 25 for x in g)
+r2 = c.get("/trips", params={"origin": "Cincinnati", "destination": "Toledo"}).json()
+assert len(r2) == 2
+assert len(c.get("/trips", params={"origin": "Dayton", "destination": "Lima"}).json()) == 2      # northbound buses
+assert c.get("/trips", params={"origin": "Anchorage", "destination": "Toledo"}).json() == []     # no cross region trips
+assert all(not x["fare_estimated"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json())
 
 t = c.get("/trips", params={"origin": "anchorage", "destination": "SEWARD", "on": "2027-07-15"}).json()
 assert [x["operator"] for x in t] == ["Sample Coach Lines", "Sample Shuttle Co", "Alaska Railroad"], t
@@ -38,6 +55,8 @@ assert before == after
 db = main.get_db()
 n = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='Alaska Railroad'").fetchone()["n"]
 assert n == len(arr_data.ARR_TRIPS), n
+n2 = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='GoBus (Ohio)'").fetchone()["n"]
+assert n2 == len(gobus_data.GOBUS_TRIPS), n2
 assert db.execute("SELECT COUNT(*) AS n FROM clicks").fetchone()["n"] >= 2
 db.close()
 
