@@ -134,7 +134,8 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 @media (max-width:1200px){ .topband { padding-left:4rem; padding-right:4rem; } }
 @media (max-width:760px){ .topband { padding:1rem 1rem 4.6rem !important; } .topband h1 { font-size:2.1rem; }
     .trip .t { font-size:1.6rem; } [class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:none; padding-left:0;
-    border-top:2px dashed var(--line); padding-top:.8rem; margin-top:.6rem; } }
+    border-top:2px dashed var(--line); padding-top:.8rem; margin-top:.6rem; }
+    [data-testid="stColumn"]:has(> div > div > .st-key-filters), [data-testid="stColumn"]:has(.st-key-filters) { order:2; } }
 </style>
 """
 
@@ -206,17 +207,22 @@ def clock(hhmm: str) -> str:
     return f"{(h % 12) or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
 
 
-ROUTE_SVG = (
-    "<svg class='route' viewBox='0 0 720 64' aria-hidden='true' focusable='false'>"
-    "<line x1='20' y1='24' x2='700' y2='24' stroke='#4fa58d' stroke-width='4'/>"
-    "<line x1='20' y1='24' x2='700' y2='24' stroke='#0e2b26' stroke-width='2' stroke-dasharray='2 14'/>"
-    + "".join(f"<circle cx='{x}' cy='24' r='{r}' fill='{c}' stroke='#fff' stroke-width='3'/>"
-              f"<text x='{x}' y='56' fill='#d7e8e3' font-size='15' text-anchor='{a}' "
-              f"font-family='Atkinson Hyperlegible, sans-serif'>{n}</text>"
-              for x, r, c, a, n in [(20, 9, "#b3265e", "start", "Seward"), (190, 6, "#fff", "middle", "Anchorage"),
-                                    (360, 6, "#fff", "middle", "Talkeetna"), (530, 6, "#fff", "middle", "Denali"),
-                                    (700, 9, "#b3265e", "end", "Fairbanks")])
-    + "</svg>")
+ROUTE_STOPS = {"Alaska": ["Seward", "Anchorage", "Talkeetna", "Denali", "Fairbanks"],
+               "Ohio": ["Toledo", "Lima", "Springfield", "Dayton", "Cincinnati"]}
+
+
+def route_svg(region: str) -> str:
+    names = ROUTE_STOPS.get(region, ROUTE_STOPS["Alaska"])
+    pts = [(20, 9, "#b3265e", "start"), (190, 6, "#fff", "middle"), (360, 6, "#fff", "middle"),
+           (530, 6, "#fff", "middle"), (700, 9, "#b3265e", "end")]
+    return ("<svg class='route' viewBox='0 0 720 64' aria-hidden='true' focusable='false'>"
+            "<line x1='20' y1='24' x2='700' y2='24' stroke='#4fa58d' stroke-width='4'/>"
+            "<line x1='20' y1='24' x2='700' y2='24' stroke='#0e2b26' stroke-width='2' stroke-dasharray='2 14'/>"
+            + "".join(f"<circle cx='{x}' cy='24' r='{r}' fill='{c}' stroke='#fff' stroke-width='3'/>"
+                      f"<text x='{x}' y='56' fill='#d7e8e3' font-size='15' text-anchor='{a}' "
+                      f"font-family='Atkinson Hyperlegible, sans-serif'>{n}</text>"
+                      for (x, r, c, a), n in zip(pts, names))
+            + "</svg>")
 
 
 def header(title: str, show_route: bool = False, region: str = "") -> None:
@@ -225,7 +231,7 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
     st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
             "['color-scheme:light','darkreader-lock:'].forEach(function(x){var m=d.createElement('meta');"
             "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
-    route = ROUTE_SVG if show_route else ""
+    route = route_svg(st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))) if show_route else ""
     st.markdown(
         f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
         <div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
@@ -234,18 +240,22 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
         made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
 
 
+DEFAULT_PAIR = {"Alaska": ("Anchorage", "Seward"), "Ohio": ("Toledo", "Cincinnati")}
+
+
 def search_bar(regions: list[dict]) -> None:
     """Search bar shown on the search and results screens. Step 1 is the region, then the two places in it."""
     q = st.session_state.query
     names = [r["name"] for r in regions]
     with st.container(key="searchbar"):
-        region = st.selectbox("Where are you travelling?", names,
+        region = st.selectbox("Where are you travelling?", names, key="region_pick",
                               index=names.index(q["region"]) if q.get("region") in names else 0)
         cities = next(r["cities"] for r in regions if r["name"] == region)
         with st.form("search_form", border=False):
             c1, c2, c3, c4, c5 = st.columns([2, 2, 1.7, 1, 1.4])
-            origin = c1.selectbox("From", cities, index=cities.index(q["from"]) if q["from"] in cities else 0)
-            dest = c2.selectbox("To", cities, index=cities.index(q["to"]) if q["to"] in cities else min(1, len(cities) - 1))
+            d_from, d_to = DEFAULT_PAIR.get(region, (cities[0], cities[min(1, len(cities) - 1)]))
+            origin = c1.selectbox("From", cities, index=cities.index(q["from"]) if q["from"] in cities else cities.index(d_from))
+            dest = c2.selectbox("To", cities, index=cities.index(q["to"]) if q["to"] in cities else cities.index(d_to))
             when = c3.date_input("Date", value=max(q["date"], date.today()), min_value=date.today())
             riders = c4.number_input("Riders", min_value=1, max_value=10, value=q["riders"])
             submitted = c5.form_submit_button("Search", type="primary", width="stretch")
@@ -399,8 +409,9 @@ def results_screen() -> None:
         shown.sort(key=keys[sort_by])
 
         if not shown:
-            st.info("No trips match these filters. Clear a filter, pick another date, or try Anchorage to "
-                    "Seward or Anchorage to Fairbanks.")
+            examples = {"Alaska": "Anchorage to Seward or Anchorage to Fairbanks",
+                        "Ohio": "Toledo to Cincinnati or Dayton to Lima"}.get(q.get("region", ""), "another pair of places")
+            st.info("No trips match these filters. Clear a filter, pick another date, or try " + examples + ".")
             return
         cheapest = min(shown, key=lambda t: t["price"])
         fastest = min(shown, key=lambda t: minutes(t["arrive"]) - minutes(t["depart"]))
