@@ -84,17 +84,41 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 .st-key-pricebox h2 { font-family:var(--display); font-size:3.2rem; margin:0; }
 
 /* hero band with the route line */
-.topband { background:var(--ink); width:100vw; margin-left:calc(50% - 50vw); padding:1.3rem calc(50vw - 590px + 5rem) 5rem; color:#fff; box-sizing:border-box; }
-.topband .brand { font-family:var(--display); font-size:1.5rem; font-weight:700; letter-spacing:.03em; }
+.topband { background:var(--ink); width:100vw; margin-left:calc(50% - 50vw); padding:.6rem calc(50vw - 590px + 5rem) 5rem; color:#fff; box-sizing:border-box; }
 .topband .tag { color:#b8d3cb; font-size:.95rem; margin-top:.1rem; }
 .topband h1 { font-family:var(--display); font-size:3rem; font-weight:700; line-height:1.02; margin:1.2rem 0 .2rem; letter-spacing:.005em; color:#fff; }
 .route { display:block; width:100%; max-width:720px; height:auto; margin:.6rem 0 .4rem; }
 .notice { background:#f4f8f7; border-left:5px solid var(--fire); color:var(--ink); padding:.55rem .8rem;
           font-size:.88rem; border-radius:3px; margin:.9rem 0 0; }
 
-/* search bar sits over the band */
-.st-key-searchbar { background:#fff; border:2px solid var(--ink); border-radius:6px;
-                    padding:.9rem 1rem .4rem; margin-top:-3.6rem; position:relative; z-index:3; box-shadow:0 8px 0 var(--fire); }
+/* top navigation bar, in the same dark color as the band under it */
+.stApp .st-key-nav { background:var(--ink); width:100vw !important; max-width:100vw !important; margin-left:calc(50% - 50vw) !important;
+              box-sizing:border-box; padding:.55rem calc(50vw - 590px + 5rem) .1rem; margin-bottom:-1rem; }
+.st-key-nav .brand { font-family:var(--display); font-size:1.7rem; font-weight:700; letter-spacing:.03em; color:#fff; line-height:2.6rem; }
+.stApp .st-key-nav .stButton button:not([kind="primary"]) { background:transparent !important; border:none !important;
+              color:#fff !important; min-height:2.6rem; box-shadow:none; }
+.stApp .st-key-nav .stButton button:not([kind="primary"]) p { color:#fff !important; }
+.stApp .st-key-nav .stButton button:not([kind="primary"]):hover { background:rgba(255,255,255,.14) !important; }
+
+/* search bar sits over the band, with a thick colored edge */
+.st-key-searchbar { background:#fff; border:4px solid var(--fire); border-radius:8px;
+                    padding:.9rem 1rem .4rem; margin-top:-3.6rem; position:relative; z-index:3; }
+
+/* trust strip, popular routes, result heading, sort pills */
+.trust { display:flex; flex-wrap:wrap; gap:.4rem 2rem; margin:1.2rem 0 .4rem; color:var(--ink); font-weight:700; }
+.trust span:before { content:"\\2713"; color:var(--green); margin-right:.45rem; font-weight:700; }
+[class*="st-key-pop-"] { background:#fff; border:1px solid var(--line); border-radius:8px; padding:.9rem 1rem; }
+[class*="st-key-pop-"]:hover { border-color:var(--ink); }
+.pop .r { min-height:2.3em; font-family:var(--display); font-size:1.7rem; font-weight:700; color:var(--ink); line-height:1.05; }
+.pop .d { color:var(--muted); font-size:.9rem; margin:.2rem 0 .5rem; }
+.count h3 { font-size:1.9rem; margin:.2rem 0 0; }
+.count .sub { color:var(--muted); font-size:.92rem; margin-bottom:.4rem; }
+.stApp [data-testid="stButtonGroup"] button { border-radius:999px !important; border:1.5px solid var(--spruce) !important;
+              background:#fff !important; color:var(--ink) !important; font-weight:700; }
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"], .stApp [data-testid="stButtonGroup"] button[aria-pressed="true"]
+              { background:var(--ink) !important; color:#fff !important; border-color:var(--ink) !important; }
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] p, .stApp [data-testid="stButtonGroup"] button[aria-pressed="true"] p
+              { color:#fff !important; }
 .st-key-searchbar label p { font-weight:700; font-size:.85rem; color:var(--muted); }
 .st-key-searchbar [data-testid="stFormSubmitButton"] button { min-height:2.9rem; margin-top:1.55rem; }
 
@@ -131,8 +155,11 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 .st-key-summary, .st-key-tier1, .st-key-tier2, .st-key-pricebox { background:#fff; border:1px solid var(--line);
     border-radius:6px; padding:1rem 1.2rem; }
 .st-key-tier2 { border-color:var(--fire); border-width:2px; }
-@media (max-width:1200px){ .topband { padding-left:4rem; padding-right:4rem; } }
-@media (max-width:760px){ .topband { padding:1rem 1rem 4.6rem !important; } .topband h1 { font-size:2.1rem; }
+@media (max-width:1200px){ .topband, .stApp .st-key-nav { padding-left:4rem; padding-right:4rem; } }
+@media (max-width:760px){ .topband { padding:.4rem 1rem 4.6rem !important; } .stApp .st-key-nav { padding:.4rem 1rem .1rem !important; }
+    .st-key-nav [data-testid="stHorizontalBlock"] { flex-wrap:wrap; gap:.1rem; }
+    .st-key-nav [data-testid="stColumn"] { flex:0 0 auto !important; width:auto !important; min-width:0 !important; }
+    .st-key-nav [data-testid="stColumn"]:first-child { flex:1 0 100% !important; } .topband h1 { font-size:2.1rem; }
     .trip .t { font-size:1.6rem; } [class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:none; padding-left:0;
     border-top:2px dashed var(--line); padding-top:.8rem; margin-top:.6rem; }
     [data-testid="stColumn"]:has(> div > div > .st-key-filters), [data-testid="stColumn"]:has(.st-key-filters) { order:2; } }
@@ -225,21 +252,38 @@ def route_svg(region: str) -> str:
             + "</svg>")
 
 
+def nav() -> None:
+    """Top bar: name on the left, main pages on the right."""
+    with st.container(key="nav"):
+        c0, c1, c2, c3, c4 = st.columns([3.2, 1, 1.7, 1.1, 1.1])
+        c0.markdown("<div class='brand'>Rural Travel Co-op</div>", unsafe_allow_html=True)
+        c1.button("Home", on_click=go, args=("search",), key="nav_home")
+        c2.button("Become a member", on_click=go, args=("join",), key="nav_join")
+        c3.button("Privacy", on_click=open_legal, args=("privacy",), key="nav_priv")
+        c4.button("Terms", on_click=open_legal, args=("terms",), key="nav_terms")
+
+
 def header(title: str, show_route: bool = False, region: str = "") -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     # Ask browsers and dark mode extensions not to restyle this page (it is designed in light colors)
     st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
             "['color-scheme:light','darkreader-lock:'].forEach(function(x){var m=d.createElement('meta');"
             "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
+    nav()
     route = route_svg(st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))) if show_route else ""
     st.markdown(
-        f"""<div class="topband"><div class="brand">Rural Travel Co-op</div>
-        <div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
+        f"""<div class="topband"><div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
         <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
         their public schedules, and neither is a partner. GoBus fares are estimates. Trips marked demo are
         made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
 
 
+POPULAR = {"Alaska": [("Anchorage", "Seward", "To the coast, by train or bus"),
+                      ("Anchorage", "Fairbanks", "The long way north"),
+                      ("Anchorage", "Talkeetna", "On the way to Denali")],
+           "Ohio": [("Toledo", "Cincinnati", "Across the state, end to end"),
+                    ("Dayton", "Lima", "Through the middle of western Ohio"),
+                    ("Toledo", "Dayton", "North to the Miami Valley")]}
 DEFAULT_PAIR = {"Alaska": ("Anchorage", "Seward"), "Ohio": ("Toledo", "Cincinnati")}
 
 
@@ -341,15 +385,22 @@ def search_screen() -> None:
     if not regions:
         return
     search_bar(regions)
-    st.write("")
-    c1, c2, c3 = st.columns(3)
-    for col, title, text in [
-            (c1, "Rail and bus together", "See trains and buses for the same trip, sorted by price or time."),
-            (c2, "You book with the operator", "We send you to the operator's own site. Refunds follow their rules."),
-            (c3, "Free to use", "No account needed. Searching and comparing cost nothing.")]:
-        with col.container(border=True):
-            st.markdown(f"**{title}**")
-            st.caption(text)
+    st.markdown("<div class='trust'><span>Free to use, no account needed</span>"
+                "<span>Rail and bus together in one search</span>"
+                "<span>You book with the operator, refunds follow their rules</span></div>",
+                unsafe_allow_html=True)
+    region = st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))
+    st.markdown(f"### Popular routes in {escape(region)}")
+    cols = st.columns(3)
+    for i, (a_, b_, note) in enumerate(POPULAR.get(region, [])):
+        with cols[i].container(key=f"pop-{i}"):
+            st.markdown(f"<div class='pop'><div class='r'>{escape(a_)} to {escape(b_)}</div>"
+                        f"<div class='d'>{escape(note)}</div></div>", unsafe_allow_html=True)
+            if st.button("See trips", key=f"popbtn{i}", width="stretch"):
+                q0 = st.session_state.query
+                st.session_state.query = {**q0, "region": region, "from": a_, "to": b_}
+                go("results")
+                st.rerun()
     with st.container(key="whatis"):
         st.markdown("### What is a co-op?")
         st.write("A co-op (short for cooperative) is a business owned by the people who use it. Instead of profit "
@@ -400,10 +451,11 @@ def results_screen() -> None:
              and (not only_partner or t["partner"])]
 
     with right:
-        top1, top2 = st.columns([2, 3])
-        top1.markdown(f"**{len(shown)} option{'s' if len(shown) != 1 else ''}** on {q['date']:%b %d, %Y}")
-        sort_by = top2.radio("Sort by", ["Cheapest", "Earliest departure", "Shortest trip"],
-                             horizontal=True, label_visibility="collapsed")
+        st.markdown(f"<div class='count'><h3>{escape(q['from'])} to {escape(q['to'])}: "
+                    f"{len(shown)} option{'s' if len(shown) != 1 else ''} found</h3>"
+                    f"<div class='sub'>{q['date']:%A, %b %d, %Y}</div></div>", unsafe_allow_html=True)
+        sort_by = st.segmented_control("Sort by", ["Cheapest", "Earliest departure", "Shortest trip"],
+                                       default="Cheapest", key="sort_by", label_visibility="collapsed") or "Cheapest"
         keys = {"Cheapest": lambda t: t["price"], "Earliest departure": lambda t: t["depart"],
                 "Shortest trip": lambda t: minutes(t["arrive"]) - minutes(t["depart"])}
         shown.sort(key=keys[sort_by])
