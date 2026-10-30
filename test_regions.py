@@ -52,8 +52,7 @@ ok(len(card_ops(at)) == 2, "morning filter keeps both")
 # sorting: earliest, cheapest, shortest on a longer pair
 at = search("Ohio", "Dayton", "Toledo")
 n = len(card_ops(at)); ok(n >= 1, f"Dayton to Toledo has results ({n})")
-sort = next(r for r in at.radio if r.options and "Earliest departure" in r.options)
-sort.set_value("Earliest departure").run()
+at.segmented_control(key="sort_by").set_value("Earliest departure").run()
 def to24(s):
     t, ap = s.split(); h, m = map(int, t.split(":")); return (h % 12 + (12 if ap == "PM" else 0)) * 60 + m
 tm = [to24(x) for x in card_times(at)[0::2]] if False else None
@@ -61,9 +60,9 @@ times = [to24(m.value) for m in []]
 raw = [re.findall(r'class="t">([^<]+)', m.value) for m in at.markdown if 'class="op"' in m.value]
 deps = [to24(r[0]) for r in raw]
 ok(deps == sorted(deps), "sorted by earliest departure")
-next(r for r in at.radio if r.options and "Cheapest" in r.options).set_value("Cheapest").run()
+at.segmented_control(key="sort_by").set_value("Cheapest").run()
 pr = card_prices(at); ok(pr == sorted(pr), "sorted by cheapest")
-next(r for r in at.radio if r.options and "Shortest trip" in r.options).set_value("Shortest trip").run()
+at.segmented_control(key="sort_by").set_value("Shortest trip").run()
 raw = [re.findall(r'class="t">([^<]+)', m.value) for m in at.markdown if 'class="op"' in m.value]
 dur = [to24(r[1]) - to24(r[0]) for r in raw]; ok(dur == sorted(dur), "sorted by shortest trip")
 
@@ -93,5 +92,21 @@ frm = next(s for s in at.selectbox if s.label == "From")
 ok("Toledo" in frm.options and "Anchorage" not in frm.options, "switching to Ohio changes the From list")
 frm = next(s for s in at.selectbox if s.label == "From"); to = next(s for s in at.selectbox if s.label == "To")
 ok(frm.value == "Toledo" and to.value == "Cincinnati", "Ohio search bar defaults to Toledo to Cincinnati")
+# popular route tiles lead to results for each region
+for region, pairs in (("Alaska", None), ("Ohio", None)):
+    at = AppTest.from_file("frontend/app.py", default_timeout=60)
+    at.session_state["step"] = "search"; at.session_state["selected"] = None; at.session_state["click_id"] = None
+    at.session_state["query"] = {"region": region, "from": "x", "to": "y", "date": date.today(), "riders": 1}
+    at.run()
+    tiles = [b for b in at.button if b.label == "See trips"]
+    ok(len(tiles) == 3, f"{region} home has 3 popular route tiles")
+    for i in range(len(tiles)):
+        at = AppTest.from_file("frontend/app.py", default_timeout=60)
+        at.session_state["step"] = "search"; at.session_state["selected"] = None; at.session_state["click_id"] = None
+        at.session_state["query"] = {"region": region, "from": "x", "to": "y", "date": date.today(), "riders": 1}
+        at.run()
+        [b for b in at.button if b.label == "See trips"][i].click(); at.run()
+        ok(at.session_state.step == "results" and len(card_ops(at)) >= 1 and not at.exception,
+           f"{region} popular tile {i + 1} opens results with trips ({at.session_state.query['from']} to {at.session_state.query['to']})")
 print("FAILED:" if fails else "ALL PASS", fails)
 sys.exit(1 if fails else 0)
