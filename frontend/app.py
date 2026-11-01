@@ -25,17 +25,17 @@ DEFAULT_DATE = date.today()   # the search opens on today; summer trains need a 
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap');
-:root { --ink:#0e2b26; --spruce:#1f6b57; --fire:#b3265e; --paper:#e8f0ee; --line:#b9cdc8; --field:#f4f8f7;
-        --green:#14543f; --muted:#40595a; --display:'Barlow Condensed','Arial Narrow',sans-serif; }
-html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system-ui, sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root { --ink:#1b2733; --spruce:#0a6cc4; --fire:#0a6cc4; --amber:#ffb700; --nav:#0b3a75; --paper:#f1f5f9; --line:#d5dde6; --field:#fff;
+        --green:#0b6b3a; --muted:#566879; --display:'Inter',system-ui,'Segoe UI',Arial,sans-serif; }
+html, body, [class*="css"], .stApp { font-family:'Inter', system-ui, 'Segoe UI', Arial, sans-serif; }
 .stApp { background:var(--paper); color:var(--ink); color-scheme:light; }
 .stApp label, .stApp label p, .stApp [data-testid="stWidgetLabel"] p, .stApp .stMarkdown p,
 .stApp [data-testid="stCheckbox"] p, .stApp [data-testid="stRadio"] p { color:var(--ink); }
 .stApp h2, .stApp h3, .stApp h4 { font-family:var(--display); letter-spacing:.01em; color:var(--ink); }
 .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"],
 .stApp input { background-color:var(--field) !important; color:var(--ink) !important; }
-.stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] { border-color:#8fa9a3 !important; }
+.stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] { border-color:#8aa0b5 !important; }
 .stApp [data-baseweb="select"] svg { fill:var(--ink); }
 .stApp [data-testid="stDateInput"] div, .stApp [data-testid="stDateInput"] input,
 .stApp [data-testid="stNumberInput"] div, .stApp [data-testid="stNumberInput"] input,
@@ -45,20 +45,20 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 .stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stNumberInput"] [data-testid="stWidgetLabel"] div,
 .stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"], .stApp [data-testid="stTextInput"] [data-testid="stWidgetLabel"] div
     { background-color:transparent !important; }
-.stApp [data-testid="stNumberInput"] button { background-color:#dbe7e4 !important; color:var(--ink) !important; }
+.stApp [data-testid="stNumberInput"] button { background-color:#e3ebf3 !important; color:var(--ink) !important; }
 .stApp [data-testid="stNumberInput"] button svg { fill:var(--ink) !important; }
 .stApp input::placeholder { color:var(--muted) !important; -webkit-text-fill-color:var(--muted) !important; }
 [data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul, [data-baseweb="calendar"],
 [data-baseweb="calendar"] div { background-color:#fff !important; color:var(--ink) !important; }
 [data-baseweb="popover"] li { background-color:#fff !important; color:var(--ink) !important; }
-[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] { background-color:#dbe9e5 !important; }
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] { background-color:#e3ebf3 !important; }
 .stApp .stButton button:not([kind="primary"]), .stApp .stDownloadButton button, .stApp .stLinkButton a:not([kind="primary"])
     { background-color:#fff !important; color:var(--ink) !important; border:2px solid var(--spruce) !important; }
 .stApp .stButton button:not([kind="primary"]) p, .stApp .stLinkButton a:not([kind="primary"]) p { color:var(--ink) !important; }
-.stApp .stButton button:not([kind="primary"]):hover { background-color:#dbe9e5 !important; }
+.stApp .stButton button:not([kind="primary"]):hover { background-color:#e3ebf3 !important; }
 .stApp .stButton button[kind="primary"], .stApp .stLinkButton a[kind="primary"],
 .stApp [data-testid="stFormSubmitButton"] button { background-color:var(--fire) !important; color:#fff !important; border:none !important; }
-.stApp .stButton button[kind="primary"]:hover, .stApp [data-testid="stFormSubmitButton"] button:hover { background-color:#8f1d4b !important; }
+.stApp .stButton button[kind="primary"]:hover, .stApp [data-testid="stFormSubmitButton"] button:hover { background-color:#084f91 !important; }
 .stApp .stButton button[kind="primary"] p, .stApp .stLinkButton a[kind="primary"] p,
 .stApp [data-testid="stFormSubmitButton"] button p { color:#fff !important; }
 .stApp .stButton button, .stApp .stLinkButton a, .stApp [data-testid="stFormSubmitButton"] button
@@ -66,29 +66,28 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
 .stApp button:focus-visible, .stApp a:focus-visible, .stApp input:focus-visible { outline:3px solid var(--ink) !important; outline-offset:2px; }
 .stApp [data-testid="stExpander"] details, .stApp [data-testid="stExpander"] summary { background-color:transparent !important; color:var(--ink) !important; }
 .stApp [data-baseweb="tab"] { color:var(--ink) !important; background:transparent !important; }
-.stApp [data-baseweb="checkbox"] span, .stApp [data-baseweb="radio"] div { border-color:#6f8a84; }
+.stApp [data-baseweb="checkbox"] span, .stApp [data-baseweb="radio"] div { border-color:#7a8fa3; }
 #MainMenu, footer, header[data-testid="stHeader"] { visibility:hidden; height:0; }
 .block-container { padding-top:0 !important; max-width:1180px; }
 
 /* captions, alerts and spacing */
 .stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] p { color:var(--muted) !important; opacity:1 !important; }
-.stApp [data-testid="stAlert"] { background-color:#dbe9e5 !important; border-left:5px solid var(--spruce); border-radius:4px; }
+.stApp [data-testid="stAlert"] { background-color:#e3ebf3 !important; border-left:5px solid var(--spruce); border-radius:4px; }
 .stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] div { color:var(--ink) !important; }
 .stApp [data-testid="stMetric"] * { color:var(--ink) !important; }
 .st-key-summary, .st-key-pricebox, .st-key-tier1, .st-key-tier2 { margin-top:1.4rem; }
 .st-key-whatis { background:#fff; border:1px solid var(--line); border-left:5px solid var(--fire); border-radius:6px; padding:1rem 1.2rem; margin:1rem 0; }
 .st-key-whatis h3 { font-size:1.6rem; margin:0 0 .3rem; }
 .st-key-tier1, .st-key-tier2 { min-height:9.5rem; }
-.stApp [data-testid="stTextInput"] [data-baseweb="base-input"] { border:1px solid #8fa9a3; border-radius:4px; }
+.stApp [data-testid="stTextInput"] [data-baseweb="base-input"] { border:1px solid #8aa0b5; border-radius:4px; }
 .st-key-summary h3, .st-key-tier1 h3, .st-key-tier2 h3 { font-size:1.9rem; }
 .st-key-pricebox h2 { font-family:var(--display); font-size:3.2rem; margin:0; }
 
 /* hero band with the route line */
 .topband { background:var(--ink); width:100vw; margin-left:calc(50% - 50vw); padding:.6rem calc(50vw - 590px + 5rem) 5rem; color:#fff; box-sizing:border-box; }
-.topband .tag { color:#b8d3cb; font-size:.95rem; margin-top:.1rem; }
+.topband .tag { color:#cfe0f2; font-size:.95rem; margin-top:.1rem; }
 .topband h1 { font-family:var(--display); font-size:3rem; font-weight:700; line-height:1.02; margin:1.2rem 0 .2rem; letter-spacing:.005em; color:#fff; }
-.route { display:block; width:100%; max-width:720px; height:auto; margin:.6rem 0 .4rem; }
-.notice { background:#f4f8f7; border-left:5px solid var(--fire); color:var(--ink); padding:.55rem .8rem;
+.notice { background:#fff; border-left:5px solid var(--fire); color:var(--ink); padding:.55rem .8rem;
           font-size:.88rem; border-radius:3px; margin:.9rem 0 0; }
 
 /* top navigation bar, in the same dark color as the band under it */
@@ -142,11 +141,11 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
                               radial-gradient(circle, var(--fire) 0 5px, transparent 6px) right center/12px 12px no-repeat; height:0; }
 .badges { margin-top:.6rem; }
 .badge { display:inline-block; font-size:.8rem; font-weight:700; padding:.15rem .5rem; border-radius:3px;
-         margin:0 .35rem .3rem 0; background:#e0eae7; color:#2b4742; }
-.badge.good { background:#d6ecdf; color:var(--green); }
-.badge.fast { background:#dbe7f3; color:#1d4e89; }
-.badge.warn { background:#fbeccb; color:#6b4a00; }
-.badge.bad { background:#f8dbe4; color:#8e1f45; }
+         margin:0 .35rem .3rem 0; background:#e8eef5; color:#34495e; }
+.badge.good { background:#dcf1e4; color:var(--green); }
+.badge.fast { background:#e3ecfb; color:#1d4e89; }
+.badge.warn { background:#fff1c2; color:#6b4a00; }
+.badge.bad { background:#fbe0e0; color:#9b1c1c; }
 .small { font-size:.85rem; color:var(--muted); margin-top:.3rem; }
 .price { text-align:left; }
 .price .big { font-family:var(--display); font-size:2.8rem; font-weight:700; color:var(--ink); line-height:1; }
@@ -163,6 +162,74 @@ html, body, [class*="css"], .stApp { font-family:'Atkinson Hyperlegible', system
     .trip .t { font-size:1.6rem; } [class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:none; padding-left:0;
     border-top:2px dashed var(--line); padding-top:.8rem; margin-top:.6rem; }
     [data-testid="stColumn"]:has(> div > div > .st-key-filters), [data-testid="stColumn"]:has(.st-key-filters) { order:2; } }
+
+/* ---------- booking site look: navy header, white cards on a light page ---------- */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 { font-family:var(--display); letter-spacing:0; font-weight:800; }
+.stApp .st-key-nav { background:var(--nav); padding:.55rem calc(50vw - 590px + 5rem) .55rem; margin-bottom:-1rem; }
+.st-key-nav .brand { font-family:var(--display); font-size:1.55rem; font-weight:800; letter-spacing:-.01em; color:#fff; line-height:2.6rem; }
+.stApp .st-key-nav .stButton button:not([kind="primary"]) { border-radius:4px !important; font-weight:600; }
+.stApp .st-key-nav .st-key-nav_join button:not([kind="primary"]) { background:#fff !important; border:1px solid #fff !important; }
+.stApp .st-key-nav .st-key-nav_join button:not([kind="primary"]) p { color:var(--nav) !important; }
+.stApp .st-key-nav .st-key-nav_join button:not([kind="primary"]):hover { background:#e3ebf3 !important; }
+
+.topband { background:var(--nav); padding:.2rem calc(50vw - 590px + 5rem) 4.6rem; }
+.topband h1 { font-size:2.7rem; font-weight:800; line-height:1.1; margin:1rem 0 .3rem; letter-spacing:-.02em; color:#fff; }
+.topband .tag { color:#e3ebf3; font-size:1.1rem; margin-top:.1rem; }
+.topband.compact { padding-bottom:3.2rem; }
+.topband.compact h1 { font-size:1.55rem; margin:.5rem 0 0; }
+.topband.compact .tag { font-size:.95rem; }
+.notice { background:#fff4cc; border-left:5px solid var(--amber); color:var(--ink); padding:.55rem .8rem; font-size:.88rem; border-radius:3px; margin:1rem 0 0; }
+
+.st-key-searchbar { background:#fff; border:4px solid var(--amber); border-radius:8px; padding:.9rem 1rem .4rem; margin-top:-3.2rem; box-shadow:none; }
+.st-key-searchbar [data-testid="stFormSubmitButton"] button { border-radius:4px; font-size:1.05rem; }
+
+.trust { display:flex; flex-wrap:wrap; gap:.4rem 2.2rem; margin:1.3rem 0 .2rem; padding:.8rem 1.1rem; background:#fff; border:1px solid var(--line); border-radius:8px; color:var(--ink); font-weight:600; }
+.trust span:before { content:"\\2713"; color:var(--green); margin-right:.5rem; font-weight:800; }
+.stApp h3.sect, .sectitle { font-size:1.6rem; margin:1.4rem 0 .2rem; }
+
+/* trending route tiles: solid color blocks with the route name in white */
+[class*="st-key-pop-"] { border:none; border-radius:10px; padding:1.1rem 1.1rem 1rem; min-height:9.5rem; }
+.st-key-pop-0 { background:#0b3a75; } .st-key-pop-1 { background:#0a6cc4; } .st-key-pop-2 { background:#0b7a8a; }
+[class*="st-key-pop-"]:hover { box-shadow:0 4px 14px rgba(11,58,117,.35); }
+.pop .r { min-height:2.3em; font-family:var(--display); font-size:1.5rem; font-weight:800; color:#fff; line-height:1.15; }
+.pop .d { color:#e3ebf3; font-size:.92rem; margin:.1rem 0 .7rem; }
+.stApp [class*="st-key-pop-"] .stButton button { background:#fff !important; border:none !important; }
+.stApp [class*="st-key-pop-"] .stButton button p { color:var(--nav) !important; font-weight:700; }
+
+/* results */
+.count h3 { font-size:1.5rem; margin:.2rem 0 0; font-weight:800; }
+.stApp [data-testid="stButtonGroup"] button { border-radius:4px !important; border:1px solid var(--spruce) !important; background:#fff !important; color:var(--spruce) !important; font-weight:600; }
+.stApp [data-testid="stButtonGroup"] button p { color:var(--spruce) !important; }
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"], .stApp [data-testid="stButtonGroup"] button[aria-pressed="true"] { background:#e3ecfb !important; color:var(--spruce) !important; border-color:var(--spruce) !important; }
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] p, .stApp [data-testid="stButtonGroup"] button[aria-pressed="true"] p { color:var(--spruce) !important; font-weight:800; }
+[class*="st-key-card-"] { border-radius:8px; padding:1rem 1.1rem; }
+[class*="st-key-card-"]:hover { border-color:var(--spruce); box-shadow:0 2px 10px rgba(10,108,196,.18); }
+[class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:1px solid var(--line); padding-left:1.1rem; }
+.op { font-size:1.2rem; font-weight:800; color:var(--spruce); }
+.pill { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:600; }
+.modetile { width:5.2rem; height:5.2rem; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff;
+            font-weight:800; font-size:1.05rem; letter-spacing:.04em; text-transform:uppercase; }
+.modetile.rail { background:var(--nav); } .modetile.bus { background:#0b7a8a; }
+.trip .t { font-size:1.75rem; font-weight:800; font-family:var(--display); letter-spacing:-.01em; }
+.price .big { font-size:2.1rem; font-weight:800; font-family:var(--display); letter-spacing:-.01em; }
+.price { text-align:right; }
+.price .per { color:var(--muted); }
+.badge { border-radius:3px; }
+.badge.good { background:#dcf1e4; color:var(--green); }
+.stApp [data-testid="stCaptionContainer"] { opacity:1; }
+
+/* footer band */
+.stApp .st-key-foot { background:var(--nav); width:100vw !important; max-width:100vw !important; margin-left:calc(50% - 50vw) !important; box-sizing:border-box;
+        padding:1.4rem calc(50vw - 590px + 5rem) 1.2rem; margin-top:2.2rem; }
+.st-key-foot .fbrand { font-size:1.3rem; font-weight:800; color:#fff; }
+.st-key-foot .ftag { color:#cfe0f2; font-size:.9rem; margin:.2rem 0 .6rem; }
+.stApp .st-key-foot .stButton button { background:transparent !important; border:none !important; box-shadow:none; text-decoration:underline; min-height:2rem; }
+.stApp .st-key-foot .stButton button p { color:#fff !important; }
+@media (max-width:1200px){ .topband, .stApp .st-key-nav, .stApp .st-key-foot { padding-left:4rem; padding-right:4rem; } }
+@media (max-width:760px){ .topband { padding:.2rem 1rem 3.6rem !important; } .topband h1 { font-size:1.9rem; } .topband.compact h1 { font-size:1.35rem; }
+    .stApp .st-key-foot { padding:1.2rem 1rem !important; } .modetile { width:100%; height:2.4rem; }
+    .trip .t { font-size:1.4rem; } .trip { gap:.5rem; } .st-key-nav .brand { line-height:2rem; font-size:1.35rem; }
+    .price { text-align:left; } [class*="st-key-card-"] [data-testid="stColumn"]:last-child { border-left:none; border-top:1px solid var(--line); } }
 </style>
 """
 
@@ -234,24 +301,6 @@ def clock(hhmm: str) -> str:
     return f"{(h % 12) or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
 
 
-ROUTE_STOPS = {"Alaska": ["Seward", "Anchorage", "Talkeetna", "Denali", "Fairbanks"],
-               "Ohio": ["Toledo", "Lima", "Springfield", "Dayton", "Cincinnati"]}
-
-
-def route_svg(region: str) -> str:
-    names = ROUTE_STOPS.get(region, ROUTE_STOPS["Alaska"])
-    pts = [(20, 9, "#b3265e", "start"), (190, 6, "#fff", "middle"), (360, 6, "#fff", "middle"),
-           (530, 6, "#fff", "middle"), (700, 9, "#b3265e", "end")]
-    return ("<svg class='route' viewBox='0 0 720 64' aria-hidden='true' focusable='false'>"
-            "<line x1='20' y1='24' x2='700' y2='24' stroke='#4fa58d' stroke-width='4'/>"
-            "<line x1='20' y1='24' x2='700' y2='24' stroke='#0e2b26' stroke-width='2' stroke-dasharray='2 14'/>"
-            + "".join(f"<circle cx='{x}' cy='24' r='{r}' fill='{c}' stroke='#fff' stroke-width='3'/>"
-                      f"<text x='{x}' y='56' fill='#d7e8e3' font-size='15' text-anchor='{a}' "
-                      f"font-family='Atkinson Hyperlegible, sans-serif'>{n}</text>"
-                      for (x, r, c, a), n in zip(pts, names))
-            + "</svg>")
-
-
 def nav() -> None:
     """Top bar: name on the left, main pages on the right."""
     with st.container(key="nav"):
@@ -270,9 +319,10 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
             "['color-scheme:light','darkreader-lock:'].forEach(function(x){var m=d.createElement('meta');"
             "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
     nav()
-    route = route_svg(st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))) if show_route else ""
+    big = show_route
+    sub = "Compare rail and bus between small towns, then book directly with the operator." if big else (region or "")
     st.markdown(
-        f"""<div class="topband"><div class="tag">A travel site owned by the riders who use it</div><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(region)}</div>" if region else ""}{route}
+        f"""<div class="topband{'' if big else ' compact'}"><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(sub)}</div>" if sub else ""}
         <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
         their public schedules, and neither is a partner. GoBus fares are estimates. Trips marked demo are
         made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
@@ -390,7 +440,7 @@ def search_screen() -> None:
                 "<span>You book with the operator, refunds follow their rules</span></div>",
                 unsafe_allow_html=True)
     region = st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))
-    st.markdown(f"### Popular routes in {escape(region)}")
+    st.markdown(f"<h3 class='sectitle'>Trending routes in {escape(region)}</h3>", unsafe_allow_html=True)
     cols = st.columns(3)
     for i, (a_, b_, note) in enumerate(POPULAR.get(region, [])):
         with cols[i].container(key=f"pop-{i}"):
@@ -487,7 +537,8 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
         badges.append(badge("Not running on your date", "bad"))
     season = f"{t['days']}. Season {t['season_start']} to {t['season_end']}." if t.get("days") else ""
     with st.container(key=f"card-{t['id']}"):
-        a, b = st.columns([3.2, 1.2])
+        tile, a, b = st.columns([0.9, 3.1, 1.3])
+        tile.markdown(f"<div class='modetile {'rail' if t['mode'] == 'Rail' else 'bus'}'>{escape(t['mode'])}</div>", unsafe_allow_html=True)
         a.markdown(
             f"""<div class="op">{escape(t['operator'])}<span class="pill">{escape(t['mode'])}</span></div>
             <div class="trip"><div><div class="t">{clock(t['depart'])}</div>
@@ -673,10 +724,12 @@ def open_legal(page: str) -> None:
 def footer() -> None:
     if st.session_state.step in ("privacy", "terms"):
         return
-    st.write("")
-    f1, f2, _ = st.columns([1, 1, 4])
-    f1.button("Privacy notice", on_click=open_legal, args=("privacy",), key="foot_priv", type="tertiary")
-    f2.button("Terms of use", on_click=open_legal, args=("terms",), key="foot_terms", type="tertiary")
+    with st.container(key="foot"):
+        st.markdown("<div class='fbrand'>Rural Travel Co-op</div><div class='ftag'>A travel site owned by the riders who use it. "
+                    "Unofficial research prototype: we do not sell tickets, you buy from the operator.</div>", unsafe_allow_html=True)
+        f1, f2, _ = st.columns([1, 1, 4])
+        f1.button("Privacy notice", on_click=open_legal, args=("privacy",), key="foot_priv", type="tertiary")
+        f2.button("Terms of use", on_click=open_legal, args=("terms",), key="foot_terms", type="tertiary")
 
 
 {"search": search_screen, "results": results_screen, "handoff": handoff_screen, "join": join_screen,
