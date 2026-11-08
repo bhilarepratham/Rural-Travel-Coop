@@ -176,29 +176,48 @@ def load_arr_trips(db: Db) -> None:
 
 
 def load_gobus_trips(db: Db) -> None:
-    """Load the unofficial GoBus (Ohio) Red Line list. Same upsert rules as the railroad list.
+    """Load the unofficial GoBus (Ohio) lists, one operator per line (Red, Green, Purple, ...).
+    Same upsert idea as the railroad list: a trip is found by line, route and departure time, so its id
+    (and any click history) stays the same; a missing row is added; a row that is no longer in the file
+    is hidden. Rows are only written when something changed, so a restart stays fast.
     Fares here are estimates (see gobus_data.py), so every row is flagged fare_estimated."""
-    op = gobus_data.OPERATOR
-    op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
-    db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, op_id))
-    for (origin, dest, dep, arr, price, days, start, end) in gobus_data.GOBUS_TRIPS:
-        found = db.execute(
-            "SELECT id FROM trips WHERE operator_id = ? AND origin = ? AND destination = ? "
-            "AND depart_time = ? AND season_start = ?", (op_id, origin, dest, dep, start)).fetchone()
-        if found:
-            db.execute(
-                "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_end = ?, "
-                "booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, is_active = ?, "
-                "fare_estimated = ? WHERE id = ?",
-                (arr, price, days, end, op["booking_url"], gobus_data.SOURCE_URL, gobus_data.CHECKED,
-                 False, True, True, found["id"]))
-        else:
-            db.execute(
-                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
-                "price, days_running, season_start, season_end, booking_url, source_url, "
-                "last_updated, is_sample, is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (op_id, origin, dest, dep, arr, price, days, start, end, op["booking_url"],
-                 gobus_data.SOURCE_URL, gobus_data.CHECKED, False, True, True))
+    legacy = db.execute("SELECT id FROM operators WHERE name = ?", (gobus_data.LEGACY_OPERATOR,)).fetchone()
+    if legacy:   # the old single "GoBus (Ohio)" operator held only the Red Line, which now has its own row
+        db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, legacy["id"]))
+    for line, op in gobus_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, depart_time, arrive_time, price, days_running, "
+                            "season_start, season_end, source_url, last_updated, is_active, fare_estimated "
+                            "FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"], r["depart_time"])] = r
+        wanted = set()
+        for (origin, dest, dep, arr, price, days, start, end) in op["trips"]:
+            wanted.add((origin, dest, dep))
+            r = existing.get((origin, dest, dep))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                    "price, days_running, season_start, season_end, booking_url, source_url, "
+                    "last_updated, is_sample, is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, dep, arr, price, days, start, end, op["booking_url"],
+                     op["source_url"], gobus_data.CHECKED, False, True, True))
+                continue
+            same = (r["arrive_time"] == arr and float(r["price"]) == float(price) and r["days_running"] == days
+                    and (str(r["season_start"]) if r["season_start"] else None) == start
+                    and (str(r["season_end"]) if r["season_end"] else None) == end
+                    and r["source_url"] == op["source_url"] and str(r["last_updated"]) == gobus_data.CHECKED
+                    and bool(r["is_active"]) and bool(r["fare_estimated"]))
+            if not same:
+                db.execute(
+                    "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    (arr, price, days, start, end, op["booking_url"], op["source_url"], gobus_data.CHECKED,
+                     False, True, True, r["id"]))
+        for key, r in existing.items():
+            if key not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
 
 
 setup_database()
@@ -219,6 +238,9 @@ REGION_OF = {
     "Bellefontaine": "Ohio", "Urbana": "Ohio", "Springfield": "Ohio", "Yellow Springs": "Ohio",
     "Dayton": "Ohio", "Middletown": "Ohio", "Oxford": "Ohio", "Cincinnati": "Ohio",
 }
+# Every other GoBus place (Columbus, Athens, Cleveland, ...). The "Ohio" region is the GoBus network,
+# so it includes a few stops just over the border (Parkersburg and Wheeling WV, Pittsburgh PA).
+REGION_OF.update({c: "Ohio" for c in gobus_data.GOBUS_CITIES})
 
 
 def active_cities() -> list[str]:
@@ -385,6 +407,25 @@ def join(member: Member) -> dict:
     db.commit()
     db.close()
     return {"id": member_id, "email": email, "tier": member.tier, "status": "created"}
+
+
+class MemberRemoval(BaseModel):
+    email: str
+
+
+@app.post("/members/remove")
+def remove_member(req: MemberRemoval) -> dict:
+    """Delete a sign up by email. The answer is the same whether or not the email was on the list, so this
+    cannot be used to find out who has joined. Note: the prototype does not confirm by email first, so
+    anyone who knows an address could remove it. Add a confirmation link before real emails are sent."""
+    email = req.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or " " in email:
+        raise HTTPException(status_code=422, detail="Please enter a valid email address")
+    db = get_db()
+    db.execute("DELETE FROM members WHERE email = ?", (email,))
+    db.commit()
+    db.close()
+    return {"status": "done"}
 
 
 @app.get("/members/count")
