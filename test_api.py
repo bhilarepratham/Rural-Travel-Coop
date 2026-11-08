@@ -9,6 +9,9 @@ old_op = main.get_operator_id(db, "Sample Railroad", "Rail", True, "https://exam
 old_trip = db.insert("INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, is_sample) "
                      "VALUES (?,?,?,?,?,?,?)", (old_op, "Anchorage", "Seward", "08:00", "12:00", 89, True))
 db.execute("INSERT INTO clicks (ref, trip_id, price_at_click) VALUES (?,?,?)", ("old", old_trip, 89))
+leg_op = main.get_operator_id(db, "GoBus (Ohio)", "Bus", False, "https://booking.ridegobus.com")
+leg_trip = db.insert("INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, fare_estimated) "
+                     "VALUES (?,?,?,?,?,?,?)", (leg_op, "Toledo", "Cincinnati", "07:21", "15:00", 22, True))
 db.commit(); db.close()
 main.setup_database()           # the start up step: loads real data and hides the old sample rail trip
 
@@ -24,14 +27,32 @@ assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Ancho
                         | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]}), cities
 assert c.get("/cities", params={"region": "Ohio"}).json() == sorted({x for t in gobus_data.GOBUS_TRIPS for x in t[:2]})
 
-# GoBus (Ohio): estimated fares are flagged and stay inside the published $5 to $25 range
+# GoBus (Ohio): eight lines, one operator each. Fares are estimates in $5 steps, flagged on every row.
 g = c.get("/trips", params={"origin": "Toledo", "destination": "Cincinnati", "on": "2027-01-15"}).json()
-assert len(g) == 2 and all(x["fare_estimated"] and x["operator"] == "GoBus (Ohio)" and x["in_season"] is True for x in g), g
-assert all(5 <= x["price"] <= 25 for x in g)
+assert len(g) == 2 and all(x["fare_estimated"] and x["operator"] == "GoBus Red Line (Ohio)" and x["in_season"] is True for x in g), g
+assert all(5 <= x["price"] <= 25 for x in g)                      # Red Line brochure: $5 to $25
+assert leg_trip not in {x["id"] for x in g}                        # the old single "GoBus (Ohio)" row is hidden
 r2 = c.get("/trips", params={"origin": "Cincinnati", "destination": "Toledo"}).json()
 assert len(r2) == 2
 assert len(c.get("/trips", params={"origin": "Dayton", "destination": "Lima"}).json()) == 2      # northbound buses
 assert c.get("/trips", params={"origin": "Anchorage", "destination": "Toledo"}).json() == []     # no cross region trips
+ca = c.get("/trips", params={"origin": "Columbus", "destination": "Athens"}).json()
+assert len(ca) == 3 and {x["operator"] for x in ca} == {"GoBus Green Line (Ohio)"} and all(x["fare_estimated"] for x in ca), ca
+assert all(x["price"] == 10 for x in ca) and all(x["in_season"] is None for x in ca)             # no printed season on Green
+assert len(c.get("/trips", params={"origin": "Athens", "destination": "Columbus"}).json()) == 3
+assert {x["operator"] for x in c.get("/trips", params={"origin": "Columbus", "destination": "Pittsburgh"}).json()} == {"GoBus Yellow Line (Ohio)"}
+assert c.get("/trips", params={"origin": "Toledo", "destination": "Columbus"}).json()[0]["operator"] == "GoBus Purple Line (Ohio)"
+ohio = c.get("/cities", params={"region": "Ohio"}).json()
+assert len(ohio) == len(gobus_data.GOBUS_CITIES) >= 50 and "Athens" in ohio and "Wheeling" in ohio
+assert not ({"Piketon", "Jackson", "Batavia", "Peebles", "Seaman"} & set(ohio))                 # Orange Line (2023 file) is not loaded
+assert not ({"Delphos", "Mount Gilead", "Coolville", "Newcomerstown"} & set(ohio))              # reservation only stops are left out
+# every GoBus row: price a multiple of $5 between $5 and the line maximum, arrival after departure, two different places
+for line, op in gobus_data.OPERATORS.items():
+    top = 25 if line == "Red" else 30
+    for (o_, d_, dep, arr, price, *_rest) in op["trips"]:
+        assert price % 5 == 0 and 5 <= price <= top and o_ != d_ and arr > dep, (line, o_, d_, dep, arr, price)
+assert [i["dropped"] for i in gobus_data.DATA_ISSUES] == ["Marietta Armory Square"]             # the one printed time that did not fit
+
 assert all(not x["fare_estimated"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json())
 
 t = c.get("/trips", params={"origin": "anchorage", "destination": "SEWARD", "on": "2027-07-15"}).json()
@@ -55,8 +76,23 @@ assert before == after
 db = main.get_db()
 n = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='Alaska Railroad'").fetchone()["n"]
 assert n == len(arr_data.ARR_TRIPS), n
-n2 = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='GoBus (Ohio)'").fetchone()["n"]
+n2 = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ? AND t.is_active = ?", ("GoBus %", True)).fetchone()["n"]
 assert n2 == len(gobus_data.GOBUS_TRIPS), n2
+n3 = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ?", ("GoBus %",)).fetchone()["n"]
+assert n3 >= len(gobus_data.GOBUS_TRIPS) + 1, n3          # the old "GoBus (Ohio)" row(s) remain, hidden (count safe to rerun on a used database)
+# Remove my email: deletes the row, gives the same answer whether or not the email was there, rejects bad input
+c.post("/members", json={"email": "Remove.Me@Example.com", "tier": 1})
+before_n = c.get("/members/count").json()["total"]
+r = c.post("/members/remove", json={"email": " remove.me@example.COM "})
+assert r.status_code == 200 and r.json() == {"status": "done"}
+assert c.get("/members/count").json()["total"] == before_n - 1
+r2 = c.post("/members/remove", json={"email": "remove.me@example.com"})      # already gone: same answer
+assert r2.status_code == 200 and r2.json() == r.json()
+assert c.get("/members/count").json()["total"] == before_n - 1
+assert c.post("/members/remove", json={"email": "not-an-email"}).status_code == 422
+c.post("/members", json={"email": "remove.me@example.com", "tier": 2})        # can join again after removing
+assert c.get("/members/count").json()["total"] == before_n
+c.post("/members/remove", json={"email": "remove.me@example.com"})
 assert db.execute("SELECT COUNT(*) AS n FROM clicks").fetchone()["n"] >= 2
 db.close()
 
