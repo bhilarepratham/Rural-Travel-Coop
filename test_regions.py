@@ -29,9 +29,22 @@ def search(region, a, b, d=None):
 # Ohio search
 at = search("Ohio", "Toledo", "Cincinnati")
 ok(not at.exception, "Ohio results load")
-ok(len(card_ops(at)) == 2 and all("GoBus" in o for o in card_ops(at)), "Ohio Toledo to Cincinnati shows 2 GoBus cards")
+ok(len(card_ops(at)) == 2 and all("GoBus Red Line" in o for o in card_ops(at)), "Ohio Toledo to Cincinnati shows 2 GoBus cards")
 ok(any("Fare estimated" in m.value for m in at.markdown), "estimated fare badge on Ohio cards")
 ok(all(p >= 5 for p in card_prices(at)), "Ohio prices at least $5")
+
+# other GoBus lines: Green (Columbus to Athens), Purple (Columbus to Toledo), and the place list
+at2 = search("Ohio", "Columbus", "Athens")
+ok(not at2.exception and len(card_ops(at2)) == 3 and all("GoBus Green Line" in o for o in card_ops(at2)), "Columbus to Athens shows 3 Green Line cards")
+ok(card_prices(at2) == [10, 10, 10], "Columbus to Athens fares are $10 estimates")
+ok(not any("None" in m.value for m in at2.markdown if 'class="op"' in m.value) and any("No season dates" in m.value for m in at2.markdown), "no 'Season None' text on lines with no printed season")
+at2 = search("Ohio", "Columbus", "Toledo")
+ok(any("GoBus Purple Line" in o for o in card_ops(at2)), "Columbus to Toledo is on the Purple Line")
+at2 = search("Ohio", "Athens", "Wheeling")
+ok(not at2.exception and len(card_ops(at2)) == 0, "a pair with no direct bus shows no cards and does not crash")
+home = AppTest.from_file("frontend/app.py", default_timeout=60); home.session_state["region_pick"] = "Ohio"; home.run()
+opts = next(s_ for s_ in home.selectbox if s_.label in ("From", "Leaving from")).options if any(s_.label in ("From", "Leaving from") for s_ in home.selectbox) else []
+ok(len(opts) >= 50 and "Athens" in opts and "Columbus" in opts, f"Ohio place list has all GoBus places ({len(opts)})")
 
 # mode filter: Ohio has no rail
 mode = next(r for r in at.radio if r.label == "Mode")
