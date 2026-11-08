@@ -1,0 +1,1256 @@
+{
+"meta": {
+"Green": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Green-Line-A-Schedules-3.2.26.pdf",
+"file_date": "2025-05-16"
+},
+"Purple": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Purple-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
+},
+"Gray": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Gray-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
+},
+"Lime": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Lime-Line-E-Schedules-3.2.26.pdf",
+"file_date": "2025-11-12"
+},
+"Pink": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/07/Pink-Line-D-Schedules-7.27.26.pdf",
+"file_date": "2026-07-27"
+},
+"Blue": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Blue-Line-C-Schedules-3.2.26.pdf",
+"file_date": "2026-02-04"
+},
+"Yellow": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Yellow-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
+}
+},
+"schedules": [
+{
+"line": "Purple",
+"direction": "Columbus to Toledo",
+"schedule": "70",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "6:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "6:25 AM",
+"skip": null
+},
+{
+"stop": "Marion Transit",
+"city": "Marion",
+"time": "7:35 AM",
+"skip": null
+},
+{
+"stop": "Upper Sandusky Wyandot Co Council on Aging",
+"city": "Upper Sandusky",
+"time": "8:05 AM",
+"skip": null
+},
+{
+"stop": "Findlay Univ of Findlay (Mazza Museum)",
+"city": "Findlay",
+"time": "8:44 AM",
+"skip": null
+},
+{
+"stop": "Bowling Green Meijer",
+"city": "Bowling Green",
+"time": "9:17 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "9:47 AM",
+"skip": null
+},
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "10:00 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Purple",
+"direction": "Toledo to Columbus",
+"schedule": "71",
+"stops": [
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "10:53 AM",
+"skip": null
+},
+{
+"stop": "Bowling Green Meijer",
+"city": "Bowling Green",
+"time": "11:23 AM",
+"skip": null
+},
+{
+"stop": "Findlay Univ of Findlay (Mazza Museum)",
+"city": "Findlay",
+"time": "11:56 AM",
+"skip": null
+},
+{
+"stop": "Upper Sandusky Wyandot Co Council on Aging",
+"city": "Upper Sandusky",
+"time": "12:35 PM",
+"skip": null
+},
+{
+"stop": "Marion Transit",
+"city": "Marion",
+"time": "1:05 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:15 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:30 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Gray",
+"direction": "Toledo to Ashtabula",
+"schedule": "66",
+"stops": [
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "8:35 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "8:53 AM",
+"skip": null
+},
+{
+"stop": "Fremont YMCA",
+"city": "Fremont",
+"time": "9:38 AM",
+"skip": null
+},
+{
+"stop": "Port Clinton Waterworks Park",
+"city": "Port Clinton",
+"time": "10:05 AM",
+"skip": null
+},
+{
+"stop": "Sandusky Amtrak Station",
+"city": "Sandusky",
+"time": "10:33 AM",
+"skip": null
+},
+{
+"stop": "Norwalk Old Fire Station",
+"city": "Norwalk",
+"time": "11:08 AM",
+"skip": null
+},
+{
+"stop": "Elyria Lorain County Transportation and CS",
+"city": "Elyria",
+"time": "12:18 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "12:46 PM",
+"skip": null
+},
+{
+"stop": "Painesville LakeTran Transfer Center",
+"city": "Painesville",
+"time": "1:39 PM",
+"skip": null
+},
+{
+"stop": "Ashtabula Bridge St Public Parking",
+"city": "Ashtabula",
+"time": "2:19 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Gray",
+"direction": "Ashtabula to Toledo",
+"schedule": "67",
+"stops": [
+{
+"stop": "Ashtabula Bridge St Public Parking",
+"city": "Ashtabula",
+"time": "9:50 AM",
+"skip": null
+},
+{
+"stop": "Painesville LakeTran Transfer Center",
+"city": "Painesville",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "11:28 AM",
+"skip": null
+},
+{
+"stop": "Elyria Lorain County Transportation and CS",
+"city": "Elyria",
+"time": "12:16 PM",
+"skip": null
+},
+{
+"stop": "Norwalk Old Firehouse",
+"city": "Norwalk",
+"time": "1:06 PM",
+"skip": null
+},
+{
+"stop": "Sandusky Amtrak Station",
+"city": "Sandusky",
+"time": "1:41 PM",
+"skip": null
+},
+{
+"stop": "Port Clinton Waterworks Park",
+"city": "Port Clinton",
+"time": "2:09 PM",
+"skip": null
+},
+{
+"stop": "Fremont YMCA",
+"city": "Fremont",
+"time": "2:36 PM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "3:21 PM",
+"skip": null
+},
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "3:34 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Lime",
+"direction": "Van Wert to Columbus",
+"schedule": "22",
+"stops": [
+{
+"stop": "Van Wert Brookside Convenience",
+"city": "Van Wert",
+"time": "12:15 PM",
+"skip": null
+},
+{
+"stop": "Delphos Microtel Inn and Suites",
+"city": "Delphos",
+"time": "12:35 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Lima Allen County Regional Transit Station",
+"city": "Lima",
+"time": "1:00 PM",
+"skip": null
+},
+{
+"stop": "Marysville Village Pantry",
+"city": "Marysville",
+"time": "2:05 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "2:40 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Lime",
+"direction": "Columbus to Van Wert",
+"schedule": "21",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:55 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:20 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Marysville Village Pantry",
+"city": "Marysville",
+"time": "3:50 PM",
+"skip": null
+},
+{
+"stop": "Lima Allen County Regional Transit Station",
+"city": "Lima",
+"time": "5:00 PM",
+"skip": null
+},
+{
+"stop": "Delphos Microtel Inn and Suites",
+"city": "Delphos",
+"time": "5:20 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Van Wert Brookside Convenience",
+"city": "Van Wert",
+"time": "5:55 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Columbus to Akron",
+"schedule": "60",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "11:05 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "11:20 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "12:15 PM",
+"skip": null
+},
+{
+"stop": "Utica Circle K",
+"city": "Utica",
+"time": "12:50 PM",
+"skip": null
+},
+{
+"stop": "Mount Vernon Colonial City Lanes",
+"city": "Mount Vernon",
+"time": "1:10 PM",
+"skip": null
+},
+{
+"stop": "Gambier Kenyon College",
+"city": "Gambier",
+"time": "1:20 PM",
+"skip": null
+},
+{
+"stop": "Loudonville Mohican State Park MTB Parking Lot",
+"city": "Loudonville",
+"time": "1:55 PM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "2:30 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "3:25 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Columbus to Akron",
+"schedule": "10",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:05 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "3:25 PM",
+"skip": null
+},
+{
+"stop": "Mount Gilead Wendy's",
+"city": "Mount Gilead",
+"time": "4:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Mansfield 7-Eleven",
+"city": "Mansfield",
+"time": "4:25 PM",
+"skip": null
+},
+{
+"stop": "Ashland McDonald's",
+"city": "Ashland",
+"time": "4:45 PM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "5:35 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Akron to Columbus",
+"schedule": "61",
+"stops": [
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "6:00 AM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "6:55 AM",
+"skip": null
+},
+{
+"stop": "Loudonville Mohican State Park MTB Parking Lot",
+"city": "Loudonville",
+"time": "7:25 AM",
+"skip": null
+},
+{
+"stop": "Gambier Kenyon College",
+"city": "Gambier",
+"time": "8:05 AM",
+"skip": null
+},
+{
+"stop": "Mount Vernon Colonial City Lanes",
+"city": "Mount Vernon",
+"time": "8:15 AM",
+"skip": null
+},
+{
+"stop": "Utica Circle K",
+"city": "Utica",
+"time": "8:45 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "9:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "9:40 AM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:55 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Akron to Columbus",
+"schedule": "11",
+"stops": [
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "7:25 PM",
+"skip": null
+},
+{
+"stop": "Ashland McDonald's",
+"city": "Ashland",
+"time": "8:10 PM",
+"skip": null
+},
+{
+"stop": "Mansfield 7-Eleven",
+"city": "Mansfield",
+"time": "8:30 PM",
+"skip": null
+},
+{
+"stop": "Mount Gilead Wendy's",
+"city": "Mount Gilead",
+"time": "8:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:40 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "10:50 PM",
+"skip": "transfer only"
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Athens/Parkersburg to Cleveland",
+"schedule": "13",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "4:35 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center at Ohio University",
+"city": "Athens",
+"time": "5:20 PM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "6:15 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "7:15 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "7:50 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "8:20 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "8:55 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "9:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Athens/Parkersburg to Cleveland",
+"schedule": "30",
+"stops": [
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Caldwell Park and Ride",
+"city": "Caldwell",
+"time": "12:00 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "12:40 PM",
+"skip": null
+},
+{
+"stop": "Newcomerstown McDonald's",
+"city": "Newcomerstown",
+"time": "1:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "1:15 PM",
+"skip": null
+},
+{
+"stop": "Mount Eaton Hardware",
+"city": "Mount Eaton",
+"time": "1:45 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "2:15 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "2:50 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "3:35 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Cleveland to Athens/Parkersburg",
+"schedule": "12",
+"stops": [
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "11:55 AM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "12:50 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "1:25 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "1:50 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "2:45 PM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "3:30 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "4:30 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center at Ohio University",
+"city": "Athens",
+"time": "4:40 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Cleveland to Athens/Parkersburg",
+"schedule": "31",
+"stops": [
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "5:40 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "6:40 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "7:15 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "7:40 PM",
+"skip": null
+},
+{
+"stop": "Newcomerstown McDonald's",
+"city": "Newcomerstown",
+"time": "7:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "8:30 PM",
+"skip": null
+},
+{
+"stop": "Caldwell Park and Ride",
+"city": "Caldwell",
+"time": "8:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "9:20 PM",
+"skip": null
+},
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "9:40 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Yellow",
+"direction": "Columbus to Pittsburgh",
+"schedule": "72",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "9:25 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "10:09 AM",
+"skip": null
+},
+{
+"stop": "Zanesville Gant Stadium",
+"city": "Zanesville",
+"time": "10:52 AM",
+"skip": null
+},
+{
+"stop": "Cambridge Shell Station",
+"city": "Cambridge",
+"time": "11:25 AM",
+"skip": null
+},
+{
+"stop": "St Clairsville Belmont College",
+"city": "St Clairsville",
+"time": "12:11 PM",
+"skip": null
+},
+{
+"stop": "Wheeling Wesbanco Arena",
+"city": "Wheeling",
+"time": "12:35 PM",
+"skip": null
+},
+{
+"stop": "Steubenville Steel Valley RTA",
+"city": "Steubenville",
+"time": "1:13 PM",
+"skip": null
+},
+{
+"stop": "Pittsburgh Int'l Airport",
+"city": "Pittsburgh",
+"time": "1:43 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Yellow",
+"direction": "Pittsburgh to Columbus",
+"schedule": "73",
+"stops": [
+{
+"stop": "Pittsburgh Int'l Airport",
+"city": "Pittsburgh",
+"time": "2:18 PM",
+"skip": null
+},
+{
+"stop": "Steubenville Steel Valley RTA",
+"city": "Steubenville",
+"time": "2:53 PM",
+"skip": null
+},
+{
+"stop": "Wheeling Wesbanco Arena",
+"city": "Wheeling",
+"time": "3:31 PM",
+"skip": null
+},
+{
+"stop": "St Clairsville Belmont College",
+"city": "St Clairsville",
+"time": "3:55 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Shell Station",
+"city": "Cambridge",
+"time": "4:41 PM",
+"skip": null
+},
+{
+"stop": "Zanesville Gant Stadium",
+"city": "Zanesville",
+"time": "5:14 PM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "5:57 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "6:41 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "6:56 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "52",
+"stops": [
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Coolville GoMart",
+"city": "Coolville",
+"time": "12:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "12:45 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "1:05 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "1:25 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "2:00 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:00 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:45 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "50",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:45 AM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "6:00 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "6:20 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "6:35 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "7:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "7:55 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "8:10 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "54",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:10 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "5:50 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "6:10 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "6:30 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "6:55 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "7:35 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "7:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "53",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "10:15 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "11:10 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "11:55 AM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "12:25 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "12:15 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "51",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "7:50 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "8:15 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "9:00 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "9:25 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "9:40 AM",
+"skip": "reservation only"
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "10:10 AM",
+"skip": null
+},
+{
+"stop": "Coolville GoMart",
+"city": "Coolville",
+"time": "10:35 AM",
+"skip": "reservation only"
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "55",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:10 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:45 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "3:50 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "4:20 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "4:35 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "5:00 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:10 PM",
+"skip": null
+}
+]
+}
+]
+}
