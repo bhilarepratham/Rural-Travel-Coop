@@ -6,6 +6,7 @@ Streamlit secrets. Locally it defaults to http://localhost:8000.
 Run locally:  streamlit run app.py      (from the frontend folder)
 """
 import os
+import time
 from datetime import date
 from html import escape
 from urllib.parse import urlencode
@@ -285,6 +286,41 @@ def api_post(path: str, body: dict | None = None, staff: bool = False):
         return None
 
 
+WAKE_MAX_SECONDS = int(os.environ.get("WAKE_MAX_SECONDS", "240"))
+
+
+def ensure_backend() -> bool:
+    """The free server goes to sleep after 15 minutes without use and can take a few minutes to wake.
+    Show a clear message while it wakes, instead of an error or a blank page. Returns True when it is ready."""
+    last_ok = st.session_state.get("backend_ok_at", 0)
+    if time.time() - last_ok < 600:
+        return True
+    try:
+        if requests.get(f"{BACKEND_URL}/health", timeout=4).ok:
+            st.session_state.backend_ok_at = time.time()
+            return True
+    except requests.RequestException:
+        pass
+    box = st.status("The free server is waking up. The first visit after a quiet spell can take 1 to 3 minutes. "
+                    "Please keep this page open. It will continue on its own.", expanded=True)
+    note = box.empty()
+    start = time.time()
+    while time.time() - start < WAKE_MAX_SECONDS:
+        try:
+            if requests.get(f"{BACKEND_URL}/health", timeout=10).ok:
+                st.session_state.backend_ok_at = time.time()
+                box.update(label="The server is ready.", state="complete", expanded=False)
+                st.rerun()
+        except requests.RequestException:
+            pass
+        note.write(f"Waiting for the server... {int(time.time() - start)} seconds so far.")
+        time.sleep(3)
+    box.update(label="The server did not wake up in time.", state="error", expanded=True)
+    st.error("The free server is still asleep or is down. Please reload this page in a minute. If it keeps "
+             "happening, tell the project team.")
+    return False
+
+
 def minutes(hhmm: str) -> int:
     h, m = hhmm.split(":")
     return int(h) * 60 + int(m)
@@ -312,7 +348,7 @@ def nav() -> None:
         c4.button("Terms", on_click=open_legal, args=("terms",), key="nav_terms")
 
 
-def header(title: str, show_route: bool = False, region: str = "") -> None:
+def header(title: str, show_route: bool = False, region: str = "", needs_backend: bool = True) -> None:
     st.markdown(CSS, unsafe_allow_html=True)
     # Ask browsers and dark mode extensions not to restyle this page (it is designed in light colors)
     st.html("<img src='data:,' style='display:none' onerror=\"var d=document,h=d.head;"
@@ -326,14 +362,25 @@ def header(title: str, show_route: bool = False, region: str = "") -> None:
         <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
         their public schedules, and neither is a partner. GoBus fares are estimates. Trips marked demo are
         made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
+    if needs_backend and not ensure_backend():
+        st.stop()
+
+
+def season_text(t: dict) -> str:
+    """'Daily. Season 2026-05-01 to 2027-04-30.' or, when the timetable prints no season, 'Daily. No season dates printed.'"""
+    if not t.get("days"):
+        return ""
+    if t.get("season_start") and t.get("season_end"):
+        return f"{t['days']}. Season {t['season_start']} to {t['season_end']}."
+    return f"{t['days']}. No season dates are printed on this timetable."
 
 
 POPULAR = {"Alaska": [("Anchorage", "Seward", "To the coast, by train or bus"),
                       ("Anchorage", "Fairbanks", "The long way north"),
                       ("Anchorage", "Talkeetna", "On the way to Denali")],
            "Ohio": [("Toledo", "Cincinnati", "Across the state, end to end"),
-                    ("Dayton", "Lima", "Through the middle of western Ohio"),
-                    ("Toledo", "Dayton", "North to the Miami Valley")]}
+                    ("Columbus", "Athens", "Southeast to Ohio University"),
+                    ("Columbus", "Pittsburgh", "East across the state line")]}
 DEFAULT_PAIR = {"Alaska": ("Anchorage", "Seward"), "Ohio": ("Toledo", "Cincinnati")}
 
 
@@ -512,7 +559,7 @@ def results_screen() -> None:
 
         if not shown:
             examples = {"Alaska": "Anchorage to Seward or Anchorage to Fairbanks",
-                        "Ohio": "Toledo to Cincinnati or Dayton to Lima"}.get(q.get("region", ""), "another pair of places")
+                        "Ohio": "Toledo to Cincinnati or Columbus to Athens"}.get(q.get("region", ""), "another pair of places")
             st.info("No trips match these filters. Clear a filter, pick another date, or try " + examples + ".")
             return
         cheapest = min(shown, key=lambda t: t["price"])
@@ -535,7 +582,7 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
         badges.append(badge("Runs on your date", "good"))
     elif t.get("in_season") is False:
         badges.append(badge("Not running on your date", "bad"))
-    season = f"{t['days']}. Season {t['season_start']} to {t['season_end']}." if t.get("days") else ""
+    season = season_text(t)
     with st.container(key=f"card-{t['id']}"):
         tile, a, b = st.columns([0.9, 3.1, 1.3])
         tile.markdown(f"<div class='modetile {'rail' if t['mode'] == 'Rail' else 'bus'}'>{escape(t['mode'])}</div>", unsafe_allow_html=True)
@@ -567,7 +614,7 @@ def handoff_screen() -> None:
         st.markdown(f"**{t['from']}** at {clock(t['depart'])}  \n**{t['to']}** at {clock(t['arrive'])}  \n"
                     f"{duration_text(t)} | {q['date']:%A, %b %d, %Y}")
         if t.get("days"):
-            st.caption(f"{t['days']}. Season {t['season_start']} to {t['season_end']}.")
+            st.caption(season_text(t))
         if t.get("in_season") is False:
             st.warning("This trip does not run on the date you searched. Check the season before you buy.")
         if t.get("fare_estimated"):
@@ -637,6 +684,13 @@ def join_screen() -> None:
             saved = api_post("/members", {"email": email, "tier": 1 if tier.startswith("Free") else 2})
         if saved:
             st.success(f"Thanks. {saved['email']} is on the list as a {'free' if saved['tier'] == 1 else 'paying'} member ({saved['status']}).")
+    with st.expander("Already joined? Remove my email"):
+        st.write("Type the email you signed up with and we will delete it from the list. "
+                 "You will see the same message whether or not it was on the list.")
+        gone = st.text_input("Email to remove", key="remove_email")
+        if st.button("Remove my email", key="remove_btn"):
+            if api_post("/members/remove", {"email": gone}):
+                st.success("Done. If that email was on the list, it has been deleted.")
     counts = api_get("/members/count")
     if counts:
         st.caption(f"Sign ups so far: {counts['total']} ({counts['tier1']} free, {counts['tier2']} paying)")
@@ -644,7 +698,7 @@ def join_screen() -> None:
 
 
 def privacy_screen() -> None:
-    header("Privacy notice")
+    header("Privacy notice", needs_backend=False)
     with st.container(key="legal"):
         st.markdown("""
 **This is a research prototype. Here is what it saves and what it does not.**
@@ -672,15 +726,15 @@ def privacy_screen() -> None:
 - Emails are kept while the prototype is being tested and are deleted when the project ends.
 
 **Your choices**
-- You can ask the project team to delete your email at any time. This prototype has no delete button yet, so
-  the team removes it by hand.
+- You can delete your email yourself at any time: open "Become a member" and use "Remove my email".
+  You can also ask the project team to delete it.
 - Joining is optional. You can search and compare trips without giving an email.
 """)
     st.button("Back", on_click=go, args=(st.session_state.get("return_to", "search"),))
 
 
 def terms_screen() -> None:
-    header("Terms of use")
+    header("Terms of use", needs_backend=False)
     with st.container(key="legal"):
         st.markdown("""
 **Please read this before you use the prototype.**
