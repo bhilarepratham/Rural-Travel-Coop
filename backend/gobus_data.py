@@ -9,13 +9,14 @@ destination stop. Each place is one city: a rider boards or gets off at the FIRS
 city on that bus. Stops marked "reservation only" (the rider must phone GoBus first) and "transfer only"
 stops are left out, because they cannot be booked online like a normal stop.
 
-FARES ARE ESTIMATES. GoBus publishes no fare for each pair of stops. What it does publish: fares are
-mileage based and go up in $5 steps, a trip under 50 miles on one line is $5, and a one way ticket is
-never more than $30 on one line ($25 on the Red Line, per its brochure). So each fare here is
-$5 x (1 + whole 50 mile steps), using straight line miles between town centers along the route times a
-road factor of 1.2, capped at the line maximum. The 50 mile step width and the 1.2 factor are
-assumptions. To use real fares, replace estimate_fare() with a lookup table taken from the booking site.
-Every row from this file is flagged fare_estimated and shown that way."""
+FARES ARE ESTIMATES. GoBus publishes no fare for each pair of stops. It does publish how fares work. Its
+2024 and 2025 requests for proposals (pages 45 and 40) say one way fares are "currently based on mileage":
+next stop over $5, under 75 miles $10, 75 to 159 miles $15, 160 to 199 miles $20, 200 miles or more $25.
+Its FAQ adds that a trip under 50 miles on one line is $5, and its Red Line brochure (and a county listing for the Gray Line) say all
+fares on those lines are $5 to $25. Fares above $25 (up to $40) come from changing lines, which this file
+does not model. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
+miles between town centers along the route times a road factor of 1.12. The factor is an assumption: 1.09 to
+1.16 reproduces six one way fares found in news and an unofficial fare listing, and the $25 top fare on the Red Line. Every row from this file is flagged fare_estimated and shown that way."""
 import json
 import math
 from pathlib import Path
@@ -24,11 +25,12 @@ BOOKING_URL = "https://booking.ridegobus.com"
 CHECKED = "2026-11-04"
 RED_SEASON = ("2026-05-01", "2027-04-30")   # printed on the Red Line brochure; other lines print none
 DAYS = "Daily"
-ROAD_FACTOR = 1.2
-STEP_MILES = 50
-STEP_FARE = 5
-LINE_MAX_FARE = {"Red": 25}      # brochure: "All fares are between $5 and $25"
-DEFAULT_MAX_FARE = 30            # base fares go "up to $30" on one line ($40 with transfers)
+ROAD_FACTOR = 1.12
+# One way fare by miles, GoBus RFP 2024 p.45 and 2025 p.40 ("currently based on mileage"), plus the FAQ rule that
+# a trip under 50 miles on one line is $5. Each pair is (miles below which the fare applies, fare in dollars).
+FARE_TIERS = [(50, 5), (75, 10), (160, 15), (200, 20)]
+TOP_FARE = 25                    # 200 miles or more; Red and Gray brochures: "All fares are between $5 and $25"
+NEXT_STOP_FARE = 5               # "Next stop over: $5.00"
 
 # Approximate town centers (lat, lon), used only to estimate road miles.
 CITY_XY = {
@@ -90,10 +92,14 @@ def miles_between(a: str, b: str) -> float:
     return 2 * 3958.8 * math.asin(math.sqrt(d))
 
 
-def estimate_fare(road_miles: float, line: str) -> int:
-    """$5 per 50 road miles step (first step $5), at least $5, at most the line maximum."""
-    fare = STEP_FARE * (1 + int(road_miles // STEP_MILES))
-    return int(min(LINE_MAX_FARE.get(line, DEFAULT_MAX_FARE), max(STEP_FARE, fare)))
+def estimate_fare(road_miles: float, adjacent: bool = False) -> int:
+    """GoBus's published mileage fare table. adjacent=True is the next stop over, which is always $5."""
+    if adjacent:
+        return NEXT_STOP_FARE
+    for limit, fare in FARE_TIERS:
+        if road_miles < limit:
+            return fare
+    return TOP_FARE
 
 
 def sequences_red() -> list[dict]:
@@ -151,7 +157,7 @@ def trips_for(seq: dict) -> list[tuple]:
             b, arr = stops[j]
             if a == b or minutes(arr) <= minutes(dep):
                 continue
-            out.append((a, b, dep, arr, estimate_fare((cum[j] - cum[i]) * ROAD_FACTOR, line), DAYS, start, end))
+            out.append((a, b, dep, arr, estimate_fare((cum[j] - cum[i]) * ROAD_FACTOR, adjacent=(j == i + 1)), DAYS, start, end))
     return out
 
 
