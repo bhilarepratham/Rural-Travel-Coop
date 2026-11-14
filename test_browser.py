@@ -43,5 +43,6 @@ with sync_playwright() as p:
     b = p.chromium.launch()
     run_region(b, "Alaska", "Alaska Railroad", "alaskarailroad")
     run_region(b, "Ohio", "GoBus Green Line (Ohio)", "ridegobus")
+    run_region(b, "Alberta", "Red Arrow (Alberta)", "redarrow.ca")
     b.close()
 print("browser checks done")
