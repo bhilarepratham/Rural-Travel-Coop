@@ -1,187 +1,1256 @@
-"""GoBus (Ohio) trips for eight lines, built from the printed and posted timetables. Unofficial.
-
-Sources: the GoBus Red Line brochure (May 2026) and the schedule PDFs on ridegobus.com for the Green,
-Purple, Gray, Lime, Pink, Blue and Yellow lines (see gobus_lines.json for each file and its date).
-The Orange Line is NOT loaded: the only schedule found is dated 2023 and GoBus says it has changed.
-
-The timetables list departure times only, so the "arrive" time of a trip is the listed time at the
-destination stop. Each place is one city: a rider boards or gets off at the FIRST stop listed for that
-city on that bus. Stops marked "reservation only" (the rider must phone GoBus first) and "transfer only"
-stops are left out, because they cannot be booked online like a normal stop.
-
-FARES ARE ESTIMATES. GoBus publishes no fare for each pair of stops. It does publish how fares work. Its
-2024 and 2025 requests for proposals (pages 45 and 40) say one way fares are "currently based on mileage":
-next stop over $5, under 75 miles $10, 75 to 159 miles $15, 160 to 199 miles $20, 200 miles or more $25.
-Its FAQ adds that a trip under 50 miles on one line is $5, and its Red Line brochure (and a county listing for the Gray Line) say all
-fares on those lines are $5 to $25. Fares above $25 (up to $40) come from changing lines, which this file
-does not model. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
-miles between town centers along the route times a road factor of 1.12. The factor is an assumption: 1.09 to
-1.16 reproduces six one way fares found in news and an unofficial fare listing, and the $25 top fare on the Red Line. Every row from this file is flagged fare_estimated and shown that way."""
-import json
-import math
-from pathlib import Path
-
-BOOKING_URL = "https://booking.ridegobus.com"
-CHECKED = "2026-11-04"
-RED_SEASON = ("2026-05-01", "2027-04-30")   # printed on the Red Line brochure; other lines print none
-DAYS = "Daily"
-ROAD_FACTOR = 1.12
-# One way fare by miles, GoBus RFP 2024 p.45 and 2025 p.40 ("currently based on mileage"), plus the FAQ rule that
-# a trip under 50 miles on one line is $5. Each pair is (miles below which the fare applies, fare in dollars).
-FARE_TIERS = [(50, 5), (75, 10), (160, 15), (200, 20)]
-TOP_FARE = 25                    # 200 miles or more; Red and Gray brochures: "All fares are between $5 and $25"
-NEXT_STOP_FARE = 5               # "Next stop over: $5.00"
-
-# Approximate town centers (lat, lon), used only to estimate road miles.
-CITY_XY = {
-    "Toledo": (41.6528, -83.5379), "Bowling Green": (41.3748, -83.6513), "Findlay": (41.0442, -83.6499),
-    "Lima": (40.7426, -84.1052), "Kenton": (40.6467, -83.6091), "Bellefontaine": (40.3612, -83.7597),
-    "Urbana": (40.1084, -83.7524), "Springfield": (39.9242, -83.8088), "Yellow Springs": (39.8070, -83.8872),
-    "Dayton": (39.7589, -84.1916), "Middletown": (39.5151, -84.3983), "Oxford": (39.5070, -84.7452),
-    "Cincinnati": (39.1031, -84.5120),
-    "Akron": (41.0814, -81.5190), "Ashland": (40.8687, -82.3182), "Ashtabula": (41.8651, -80.7898),
-    "Athens": (39.3292, -82.1013), "Caldwell": (39.7487, -81.5157), "Cambridge": (40.0312, -81.5885),
-    "Canton": (40.7989, -81.3784), "Cleveland": (41.4993, -81.6944), "Columbus": (39.9612, -82.9988),
-    "Elyria": (41.3684, -82.1077), "Fremont": (41.3503, -83.1219), "Gambier": (40.3756, -82.3957),
-    "Lancaster": (39.7137, -82.5993), "Logan": (39.5403, -82.4071), "Loudonville": (40.6359, -82.2326),
-    "Mansfield": (40.7584, -82.5154), "Marietta": (39.4154, -81.4548), "Marion": (40.5887, -83.1285),
-    "Marysville": (40.2364, -83.3671), "Mount Eaton": (40.7042, -81.6918), "Mount Vernon": (40.3934, -82.4857),
-    "Nelsonville": (39.4595, -82.2321), "New Philadelphia": (40.4898, -81.4457), "Newark": (40.0581, -82.4013),
-    "Norwalk": (41.2426, -82.6157), "Painesville": (41.7245, -81.2457), "Parkersburg": (39.2667, -81.5615),
-    "Pittsburgh": (40.4915, -80.2329), "Port Clinton": (41.5120, -82.9377), "Sandusky": (41.4489, -82.7080),
-    "St Clairsville": (40.0803, -80.9007), "Steubenville": (40.3698, -80.6340), "Upper Sandusky": (40.8273, -83.2810),
-    "Utica": (40.2326, -82.4510), "Van Wert": (40.8695, -84.5841), "Wheeling": (40.0640, -80.7209),
-    "Wooster": (40.8051, -81.9351), "Zanesville": (39.9403, -82.0132),
+{
+"meta": {
+"Green": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Green-Line-A-Schedules-3.2.26.pdf",
+"file_date": "2025-05-16"
+},
+"Purple": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Purple-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
+},
+"Gray": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Gray-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
+},
+"Lime": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Lime-Line-E-Schedules-3.2.26.pdf",
+"file_date": "2025-11-12"
+},
+"Pink": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/07/Pink-Line-D-Schedules-7.27.26.pdf",
+"file_date": "2026-07-27"
+},
+"Blue": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Blue-Line-C-Schedules-3.2.26.pdf",
+"file_date": "2026-02-04"
+},
+"Yellow": {
+"source_url": "https://ridegobus.com/wp-content/uploads/2026/02/Yellow-Line-Schedules-3.2.26.pdf",
+"file_date": "2026-03-02"
 }
-
-# ---- Red Line, as printed (departure time of each bus at each stop) ----
-SOUTH_STOPS = ["Toledo", "Bowling Green", "Findlay", "Lima", "Kenton", "Bellefontaine", "Urbana",
-               "Springfield", "Yellow Springs", "Dayton", "Middletown", "Oxford", "Cincinnati"]
-SOUTH = {   # stop: (bus 62, bus 64) as printed
-    "Toledo": ("7:21a", "10:21a"), "Bowling Green": ("7:51a", "10:51a"), "Findlay": ("8:22a", "11:22a"),
-    "Lima": ("9:05a", "12:05p"), "Kenton": ("9:48a", "12:48p"), "Bellefontaine": ("10:26a", "1:26p"),
-    "Urbana": ("10:57a", "1:57p"), "Springfield": ("11:55a", "2:55p"), "Yellow Springs": ("12:16p", "3:16p"),
-    "Dayton": ("12:49p", "3:49p"), "Middletown": ("1:27p", "4:27p"), "Oxford": ("2:05p", "5:05p"),
-    "Cincinnati": ("3:00p", "6:00p")}
-NORTH = {   # stop: (bus 63, bus 65) as printed
-    "Toledo": ("4:03p", "7:03p"), "Bowling Green": ("3:33p", "6:33p"), "Findlay": ("3:02p", "6:02p"),
-    "Lima": ("2:19p", "5:19p"), "Kenton": ("1:36p", "4:36p"), "Bellefontaine": ("12:58p", "3:58p"),
-    "Urbana": ("12:27p", "3:27p"), "Springfield": ("11:57a", "2:57p"), "Yellow Springs": ("11:04a", "2:04p"),
-    "Dayton": ("10:31a", "1:31p"), "Middletown": ("9:53a", "12:53p"), "Oxford": ("9:15a", "12:15p"),
-    "Cincinnati": ("8:20a", "11:20a")}
-
-
-def to24(t: str) -> str:
-    """'7:21a' or '7:21 AM' to '07:21'."""
-    t = t.strip().upper().replace(" ", "")
-    pm = t.endswith("P") or t.endswith("PM")
-    h, m = t.rstrip("APM").split(":")
-    h = int(h) % 12 + (12 if pm else 0)
-    return f"{h:02d}:{int(m):02d}"
-
-
-def minutes(hhmm: str) -> int:
-    h, m = hhmm.split(":")
-    return int(h) * 60 + int(m)
-
-
-def miles_between(a: str, b: str) -> float:
-    la1, lo1 = map(math.radians, CITY_XY[a])
-    la2, lo2 = map(math.radians, CITY_XY[b])
-    d = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
-    return 2 * 3958.8 * math.asin(math.sqrt(d))
-
-
-def estimate_fare(road_miles: float, adjacent: bool = False) -> int:
-    """GoBus's published mileage fare table. adjacent=True is the next stop over, which is always $5."""
-    if adjacent:
-        return NEXT_STOP_FARE
-    for limit, fare in FARE_TIERS:
-        if road_miles < limit:
-            return fare
-    return TOP_FARE
-
-
-def sequences_red() -> list[dict]:
-    south = [{"line": "Red", "schedule": f"Bus {n}", "direction": "Toledo to Cincinnati",
-              "stops": [(c, to24(SOUTH[c][i])) for c in SOUTH_STOPS]} for i, n in ((0, 62), (1, 64))]
-    rev = list(reversed(SOUTH_STOPS))
-    north = [{"line": "Red", "schedule": f"Bus {n}", "direction": "Cincinnati to Toledo",
-              "stops": [(c, to24(NORTH[c][i])) for c in rev]} for i, n in ((0, 63), (1, 65))]
-    return south + north
-
-
-DATA_ISSUES: list[dict] = []     # things dropped because the printed times disagree; read by the Day 2 workbook
-EXCLUDED_STOPS: dict = {}        # (line, stop, reason) -> count of bus runs it was left out of
-
-
-def sequences_other() -> list[dict]:
-    raw = json.loads((Path(__file__).parent / "gobus_lines.json").read_text())
-    out = []
-    for sch in raw["schedules"]:
-        seen, stops = set(), []
-        for s in sch["stops"]:
-            if s["skip"]:
-                key = (sch["line"], s["stop"], s["skip"])
-                EXCLUDED_STOPS[key] = EXCLUDED_STOPS.get(key, 0) + 1
-                continue
-            if s["city"] in seen:       # second stop in the same city: the rider uses the first one
-                continue
-            seen.add(s["city"])
-            stops.append((s["city"], to24(s["time"]), s["stop"]))
-        # Printed times must rise along the route. Where one does not, drop the earlier-listed stop and note it.
-        i = 1
-        while i < len(stops):
-            if minutes(stops[i][1]) < minutes(stops[i - 1][1]):
-                bad = stops.pop(i - 1)
-                DATA_ISSUES.append({"line": sch["line"], "schedule": sch["schedule"], "dropped": bad[2],
-                                    "time": bad[1], "reason": f"time is later than the next stop ({stops[i - 1][2]} {stops[i - 1][1]}) on the same bus"})
-                i = max(1, i - 1)
-            else:
-                i += 1
-        out.append({"line": sch["line"], "schedule": f"Trip {sch['schedule']}", "direction": sch["direction"],
-                    "stops": [(c, t) for c, t, _ in stops]})
-    return out
-
-
-def trips_for(seq: dict) -> list[tuple]:
-    """Every stop to stop trip on one bus run: (origin, dest, depart, arrive, price, days, start, end)."""
-    line, stops = seq["line"], seq["stops"]
-    start, end = RED_SEASON if line == "Red" else (None, None)
-    cum = [0.0]
-    for (a, _), (b, _) in zip(stops, stops[1:]):
-        cum.append(cum[-1] + miles_between(a, b))
-    out = []
-    for i, (a, dep) in enumerate(stops):
-        for j in range(i + 1, len(stops)):
-            b, arr = stops[j]
-            if a == b or minutes(arr) <= minutes(dep):
-                continue
-            out.append((a, b, dep, arr, estimate_fare((cum[j] - cum[i]) * ROAD_FACTOR, adjacent=(j == i + 1)), DAYS, start, end))
-    return out
-
-
-LINE_NAMES = ["Red", "Green", "Purple", "Gray", "Lime", "Pink", "Blue", "Yellow"]
-_META = json.loads((Path(__file__).parent / "gobus_lines.json").read_text())["meta"]
-_SEQS = sequences_red() + sequences_other()
-
-# One operator row per line, so the result card says which line the bus is on.
-OPERATORS = {}
-for _line in LINE_NAMES:
-    _seen, _trips = set(), []
-    for _s in (s for s in _SEQS if s["line"] == _line):
-        for t in trips_for(_s):
-            if t[:3] not in _seen:     # same origin, destination and departure time on two schedules: keep one
-                _seen.add(t[:3])
-                _trips.append(t)
-    OPERATORS[_line] = {
-        "name": f"GoBus {_line} Line (Ohio)", "mode": "Bus", "is_partner": False, "booking_url": BOOKING_URL,
-        "notes": "Intercity bus network run for ODOT. Unofficial listing, not a partner.",
-        "source_url": ("https://www.wittenberg.edu/sites/default/files/media/GoBusRouteBrochure.pdf"
-                       if _line == "Red" else _META[_line]["source_url"]),
-        "file_date": "2026-05" if _line == "Red" else _META[_line]["file_date"],
-        "trips": _trips}
-
-LEGACY_OPERATOR = "GoBus (Ohio)"     # the old single operator name; its trips are hidden on load
-GOBUS_TRIPS = [t for o in OPERATORS.values() for t in o["trips"]]
-GOBUS_CITIES = sorted({t[0] for t in GOBUS_TRIPS} | {t[1] for t in GOBUS_TRIPS})
+},
+"schedules": [
+{
+"line": "Purple",
+"direction": "Columbus to Toledo",
+"schedule": "70",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "6:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "6:25 AM",
+"skip": null
+},
+{
+"stop": "Marion Transit",
+"city": "Marion",
+"time": "7:35 AM",
+"skip": null
+},
+{
+"stop": "Upper Sandusky Wyandot Co Council on Aging",
+"city": "Upper Sandusky",
+"time": "8:05 AM",
+"skip": null
+},
+{
+"stop": "Findlay Univ of Findlay (Mazza Museum)",
+"city": "Findlay",
+"time": "8:44 AM",
+"skip": null
+},
+{
+"stop": "Bowling Green Meijer",
+"city": "Bowling Green",
+"time": "9:17 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "9:47 AM",
+"skip": null
+},
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "10:00 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Purple",
+"direction": "Toledo to Columbus",
+"schedule": "71",
+"stops": [
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "10:53 AM",
+"skip": null
+},
+{
+"stop": "Bowling Green Meijer",
+"city": "Bowling Green",
+"time": "11:23 AM",
+"skip": null
+},
+{
+"stop": "Findlay Univ of Findlay (Mazza Museum)",
+"city": "Findlay",
+"time": "11:56 AM",
+"skip": null
+},
+{
+"stop": "Upper Sandusky Wyandot Co Council on Aging",
+"city": "Upper Sandusky",
+"time": "12:35 PM",
+"skip": null
+},
+{
+"stop": "Marion Transit",
+"city": "Marion",
+"time": "1:05 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:15 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:30 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Gray",
+"direction": "Toledo to Ashtabula",
+"schedule": "66",
+"stops": [
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "8:35 AM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "8:53 AM",
+"skip": null
+},
+{
+"stop": "Fremont YMCA",
+"city": "Fremont",
+"time": "9:38 AM",
+"skip": null
+},
+{
+"stop": "Port Clinton Waterworks Park",
+"city": "Port Clinton",
+"time": "10:05 AM",
+"skip": null
+},
+{
+"stop": "Sandusky Amtrak Station",
+"city": "Sandusky",
+"time": "10:33 AM",
+"skip": null
+},
+{
+"stop": "Norwalk Old Fire Station",
+"city": "Norwalk",
+"time": "11:08 AM",
+"skip": null
+},
+{
+"stop": "Elyria Lorain County Transportation and CS",
+"city": "Elyria",
+"time": "12:18 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "12:46 PM",
+"skip": null
+},
+{
+"stop": "Painesville LakeTran Transfer Center",
+"city": "Painesville",
+"time": "1:39 PM",
+"skip": null
+},
+{
+"stop": "Ashtabula Bridge St Public Parking",
+"city": "Ashtabula",
+"time": "2:19 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Gray",
+"direction": "Ashtabula to Toledo",
+"schedule": "67",
+"stops": [
+{
+"stop": "Ashtabula Bridge St Public Parking",
+"city": "Ashtabula",
+"time": "9:50 AM",
+"skip": null
+},
+{
+"stop": "Painesville LakeTran Transfer Center",
+"city": "Painesville",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "11:28 AM",
+"skip": null
+},
+{
+"stop": "Elyria Lorain County Transportation and CS",
+"city": "Elyria",
+"time": "12:16 PM",
+"skip": null
+},
+{
+"stop": "Norwalk Old Firehouse",
+"city": "Norwalk",
+"time": "1:06 PM",
+"skip": null
+},
+{
+"stop": "Sandusky Amtrak Station",
+"city": "Sandusky",
+"time": "1:41 PM",
+"skip": null
+},
+{
+"stop": "Port Clinton Waterworks Park",
+"city": "Port Clinton",
+"time": "2:09 PM",
+"skip": null
+},
+{
+"stop": "Fremont YMCA",
+"city": "Fremont",
+"time": "2:36 PM",
+"skip": null
+},
+{
+"stop": "Toledo TARTA Transit Hub",
+"city": "Toledo",
+"time": "3:21 PM",
+"skip": null
+},
+{
+"stop": "Toledo University of Toledo",
+"city": "Toledo",
+"time": "3:34 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Lime",
+"direction": "Van Wert to Columbus",
+"schedule": "22",
+"stops": [
+{
+"stop": "Van Wert Brookside Convenience",
+"city": "Van Wert",
+"time": "12:15 PM",
+"skip": null
+},
+{
+"stop": "Delphos Microtel Inn and Suites",
+"city": "Delphos",
+"time": "12:35 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Lima Allen County Regional Transit Station",
+"city": "Lima",
+"time": "1:00 PM",
+"skip": null
+},
+{
+"stop": "Marysville Village Pantry",
+"city": "Marysville",
+"time": "2:05 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "2:40 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Lime",
+"direction": "Columbus to Van Wert",
+"schedule": "21",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "2:55 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:20 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Marysville Village Pantry",
+"city": "Marysville",
+"time": "3:50 PM",
+"skip": null
+},
+{
+"stop": "Lima Allen County Regional Transit Station",
+"city": "Lima",
+"time": "5:00 PM",
+"skip": null
+},
+{
+"stop": "Delphos Microtel Inn and Suites",
+"city": "Delphos",
+"time": "5:20 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Van Wert Brookside Convenience",
+"city": "Van Wert",
+"time": "5:55 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Columbus to Akron",
+"schedule": "60",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "11:05 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "11:20 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "12:15 PM",
+"skip": null
+},
+{
+"stop": "Utica Circle K",
+"city": "Utica",
+"time": "12:50 PM",
+"skip": null
+},
+{
+"stop": "Mount Vernon Colonial City Lanes",
+"city": "Mount Vernon",
+"time": "1:10 PM",
+"skip": null
+},
+{
+"stop": "Gambier Kenyon College",
+"city": "Gambier",
+"time": "1:20 PM",
+"skip": null
+},
+{
+"stop": "Loudonville Mohican State Park MTB Parking Lot",
+"city": "Loudonville",
+"time": "1:55 PM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "2:30 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "3:25 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Columbus to Akron",
+"schedule": "10",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:05 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "3:25 PM",
+"skip": null
+},
+{
+"stop": "Mount Gilead Wendy's",
+"city": "Mount Gilead",
+"time": "4:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Mansfield 7-Eleven",
+"city": "Mansfield",
+"time": "4:25 PM",
+"skip": null
+},
+{
+"stop": "Ashland McDonald's",
+"city": "Ashland",
+"time": "4:45 PM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "5:35 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Akron to Columbus",
+"schedule": "61",
+"stops": [
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "6:00 AM",
+"skip": null
+},
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "6:55 AM",
+"skip": null
+},
+{
+"stop": "Loudonville Mohican State Park MTB Parking Lot",
+"city": "Loudonville",
+"time": "7:25 AM",
+"skip": null
+},
+{
+"stop": "Gambier Kenyon College",
+"city": "Gambier",
+"time": "8:05 AM",
+"skip": null
+},
+{
+"stop": "Mount Vernon Colonial City Lanes",
+"city": "Mount Vernon",
+"time": "8:15 AM",
+"skip": null
+},
+{
+"stop": "Utica Circle K",
+"city": "Utica",
+"time": "8:45 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "9:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "9:40 AM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:55 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Pink",
+"direction": "Akron to Columbus",
+"schedule": "11",
+"stops": [
+{
+"stop": "Wooster Bell Stores",
+"city": "Wooster",
+"time": "7:25 PM",
+"skip": null
+},
+{
+"stop": "Ashland McDonald's",
+"city": "Ashland",
+"time": "8:10 PM",
+"skip": null
+},
+{
+"stop": "Mansfield 7-Eleven",
+"city": "Mansfield",
+"time": "8:30 PM",
+"skip": null
+},
+{
+"stop": "Mount Gilead Wendy's",
+"city": "Mount Gilead",
+"time": "8:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:40 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "10:50 PM",
+"skip": "transfer only"
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Athens/Parkersburg to Cleveland",
+"schedule": "13",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "4:35 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center at Ohio University",
+"city": "Athens",
+"time": "5:20 PM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "6:15 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "7:15 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "7:50 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "8:20 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "8:55 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "9:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Athens/Parkersburg to Cleveland",
+"schedule": "30",
+"stops": [
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Caldwell Park and Ride",
+"city": "Caldwell",
+"time": "12:00 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "12:40 PM",
+"skip": null
+},
+{
+"stop": "Newcomerstown McDonald's",
+"city": "Newcomerstown",
+"time": "1:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "1:15 PM",
+"skip": null
+},
+{
+"stop": "Mount Eaton Hardware",
+"city": "Mount Eaton",
+"time": "1:45 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "2:15 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "2:50 PM",
+"skip": null
+},
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "3:35 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Cleveland to Athens/Parkersburg",
+"schedule": "12",
+"stops": [
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "11:55 AM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "12:50 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "1:25 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "1:50 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "2:45 PM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "3:30 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "4:30 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center at Ohio University",
+"city": "Athens",
+"time": "4:40 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Blue",
+"direction": "Cleveland to Athens/Parkersburg",
+"schedule": "31",
+"stops": [
+{
+"stop": "Cleveland GCRTA Brook Park Station",
+"city": "Cleveland",
+"time": "5:40 PM",
+"skip": null
+},
+{
+"stop": "Akron Metro Transit Station",
+"city": "Akron",
+"time": "6:40 PM",
+"skip": null
+},
+{
+"stop": "Canton SARTA Transit Station",
+"city": "Canton",
+"time": "7:15 PM",
+"skip": null
+},
+{
+"stop": "New Philadelphia Eagle Truck Stop",
+"city": "New Philadelphia",
+"time": "7:40 PM",
+"skip": null
+},
+{
+"stop": "Newcomerstown McDonald's",
+"city": "Newcomerstown",
+"time": "7:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Cambridge Marathon Station",
+"city": "Cambridge",
+"time": "8:30 PM",
+"skip": null
+},
+{
+"stop": "Caldwell Park and Ride",
+"city": "Caldwell",
+"time": "8:50 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "9:20 PM",
+"skip": null
+},
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "9:40 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Yellow",
+"direction": "Columbus to Pittsburgh",
+"schedule": "72",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "9:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "9:25 AM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "10:09 AM",
+"skip": null
+},
+{
+"stop": "Zanesville Gant Stadium",
+"city": "Zanesville",
+"time": "10:52 AM",
+"skip": null
+},
+{
+"stop": "Cambridge Shell Station",
+"city": "Cambridge",
+"time": "11:25 AM",
+"skip": null
+},
+{
+"stop": "St Clairsville Belmont College",
+"city": "St Clairsville",
+"time": "12:11 PM",
+"skip": null
+},
+{
+"stop": "Wheeling Wesbanco Arena",
+"city": "Wheeling",
+"time": "12:35 PM",
+"skip": null
+},
+{
+"stop": "Steubenville Steel Valley RTA",
+"city": "Steubenville",
+"time": "1:13 PM",
+"skip": null
+},
+{
+"stop": "Pittsburgh Int'l Airport",
+"city": "Pittsburgh",
+"time": "1:43 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Yellow",
+"direction": "Pittsburgh to Columbus",
+"schedule": "73",
+"stops": [
+{
+"stop": "Pittsburgh Int'l Airport",
+"city": "Pittsburgh",
+"time": "2:18 PM",
+"skip": null
+},
+{
+"stop": "Steubenville Steel Valley RTA",
+"city": "Steubenville",
+"time": "2:53 PM",
+"skip": null
+},
+{
+"stop": "Wheeling Wesbanco Arena",
+"city": "Wheeling",
+"time": "3:31 PM",
+"skip": null
+},
+{
+"stop": "St Clairsville Belmont College",
+"city": "St Clairsville",
+"time": "3:55 PM",
+"skip": null
+},
+{
+"stop": "Cambridge Shell Station",
+"city": "Cambridge",
+"time": "4:41 PM",
+"skip": null
+},
+{
+"stop": "Zanesville Gant Stadium",
+"city": "Zanesville",
+"time": "5:14 PM",
+"skip": null
+},
+{
+"stop": "Newark COTC/OSU Newark",
+"city": "Newark",
+"time": "5:57 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "6:41 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "6:56 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "52",
+"stops": [
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Coolville GoMart",
+"city": "Coolville",
+"time": "12:05 PM",
+"skip": "reservation only"
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "12:45 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "1:05 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "1:25 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "2:00 PM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:00 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:45 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "50",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:45 AM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "6:00 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "6:20 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "6:35 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "7:05 AM",
+"skip": null
+},
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "7:55 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "8:10 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Athens/Parkersburg to Columbus",
+"schedule": "54",
+"stops": [
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:10 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "5:50 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "6:10 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "6:30 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "6:55 PM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "7:35 PM",
+"skip": null
+},
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "7:50 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "53",
+"stops": [
+{
+"stop": "Columbus Downtown",
+"city": "Columbus",
+"time": "10:15 AM",
+"skip": null
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "10:35 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "11:10 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "11:55 AM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "12:25 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "12:15 PM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "51",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "7:50 AM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "8:15 AM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "9:00 AM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "9:25 AM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "9:40 AM",
+"skip": "reservation only"
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "10:10 AM",
+"skip": null
+},
+{
+"stop": "Coolville GoMart",
+"city": "Coolville",
+"time": "10:35 AM",
+"skip": "reservation only"
+},
+{
+"stop": "Marietta Armory Square",
+"city": "Marietta",
+"time": "11:35 AM",
+"skip": null
+},
+{
+"stop": "Parkersburg Marathon Station",
+"city": "Parkersburg",
+"time": "11:15 AM",
+"skip": null
+}
+]
+},
+{
+"line": "Green",
+"direction": "Columbus to Athens/Parkersburg",
+"schedule": "55",
+"stops": [
+{
+"stop": "Columbus Greyhound",
+"city": "Columbus",
+"time": "3:10 PM",
+"skip": "transfer only"
+},
+{
+"stop": "Columbus John Glenn Airport",
+"city": "Columbus",
+"time": "2:45 PM",
+"skip": null
+},
+{
+"stop": "Lancaster Love's",
+"city": "Lancaster",
+"time": "3:50 PM",
+"skip": null
+},
+{
+"stop": "Logan Public Transit",
+"city": "Logan",
+"time": "4:20 PM",
+"skip": null
+},
+{
+"stop": "Nelsonville Hocking College",
+"city": "Nelsonville",
+"time": "4:35 PM",
+"skip": null
+},
+{
+"stop": "Athens Baker Center, Ohio University",
+"city": "Athens",
+"time": "5:00 PM",
+"skip": null
+},
+{
+"stop": "Athens Community Center",
+"city": "Athens",
+"time": "5:10 PM",
+"skip": null
+}
+]
+}
+]
+}
