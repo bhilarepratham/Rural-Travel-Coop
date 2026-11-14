@@ -1,7 +1,7 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from fastapi.testclient import TestClient
-import arr_data, gobus_data, main
+import alberta_data, arr_data, gobus_data, main
 
 # A leftover made up "Sample Railroad" trip from the old seed data, with a click on it
 db = main.get_db()
@@ -18,13 +18,14 @@ main.setup_database()           # the start up step: loads real data and hides t
 c = TestClient(main.app)
 assert c.get("/health").json()["status"] == "ok"
 regs = c.get("/regions").json()
-assert [r["name"] for r in regs] == ["Alaska", "Ohio"], regs
-assert "Anchorage" in regs[0]["cities"] and "Toledo" in regs[1]["cities"] and "Anchorage" not in regs[1]["cities"]
+assert [r["name"] for r in regs] == ["Alaska", "Alberta", "Ohio"], regs
+assert "Anchorage" in regs[0]["cities"] and "Toledo" in regs[2]["cities"] and "Anchorage" not in regs[2]["cities"]
+assert regs[1]["cities"] == alberta_data.ALBERTA_CITIES and "Edmonton" in regs[1]["cities"]
 assert "Anchorage" in c.get("/cities", params={"region": "Alaska"}).json()
 assert c.get("/cities", params={"region": "Nowhere"}).json() == []
 cities = c.get("/cities").json()
 assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Anchorage", "Seward"}
-                        | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]}), cities
+                        | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]} | set(alberta_data.ALBERTA_CITIES)), cities
 assert c.get("/cities", params={"region": "Ohio"}).json() == sorted({x for t in gobus_data.GOBUS_TRIPS for x in t[:2]})
 
 # GoBus (Ohio): eight lines, one operator each. Fares are estimates in $5 steps, flagged on every row.
@@ -44,11 +45,39 @@ assert {x["operator"] for x in c.get("/trips", params={"origin": "Columbus", "de
 assert c.get("/trips", params={"origin": "Toledo", "destination": "Columbus"}).json()[0]["operator"] == "GoBus Purple Line (Ohio)"
 ohio = c.get("/cities", params={"region": "Ohio"}).json()
 assert len(ohio) == len(gobus_data.GOBUS_CITIES) >= 50 and "Athens" in ohio and "Wheeling" in ohio
+
+# ---- Alberta: listings with no times; only Red Arrow rows carry an estimated fare (Canadian dollars) ----
+ef_ab = alberta_data.estimate_fare
+assert ef_ab(149.9) is None and ef_ab(150) == 34 and ef_ab(315) == 72 and ef_ab(424) == 98 and ef_ab(582) == 134
+ab = c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()
+assert {x["operator"] for x in ab} == {"Red Arrow (Alberta)", "FlixBus (Alberta)", "Cold Shot (Alberta)", "Rider Express (Alberta)"}, ab
+assert all(x["depart"] is None and x["arrive"] is None and x["currency"] == "CAD" and x["mode"] == "Bus" for x in ab)
+assert ab[0]["operator"] == "Red Arrow (Alberta)" and ab[0]["price"] == 72.0 and ab[0]["fare_estimated"] is True   # priced first
+assert all(x["price"] is None and not x["fare_estimated"] for x in ab[1:])                  # no fare shown for the others, listed last
+assert ab[0]["days"] == "Daily" and ab[0]["source_url"].startswith("https://www.redarrow.ca/routes/")
+fm = c.get("/trips", params={"origin": "Edmonton", "destination": "Fort McMurray"}).json()
+assert [x["price"] for x in fm if x["operator"] == "Red Arrow (Alberta)"] == [97.0]
+assert c.get("/trips", params={"origin": "Gibbons", "destination": "Radway"}).json()[0]["price"] is None   # under 150 km: no estimate
+rd = c.get("/trips", params={"origin": "Red Deer", "destination": "Fort McMurray"}).json()
+assert rd[0]["days"] == "Mon, Tue, Wed, Thu, Sun" and rd[0]["price"] == 134.0
+assert c.get("/trips", params={"origin": "Fort McMurray", "destination": "Red Deer"}).json()[0]["days"] == "Days not shown on the route page"
+assert len(c.get("/trips", params={"origin": "Calgary", "destination": "Lethbridge"}).json()) == 1       # Flix only
+assert c.get("/trips", params={"origin": "Edmonton", "destination": "Toledo"}).json() == []
+assert all(x["currency"] == "USD" for x in g)                                                          # Ohio stays in US dollars
+for o_ in alberta_data.OPERATORS.values():
+    assert o_["name"].endswith("(Alberta)") and not o_["is_partner"]
+    for (a_, b_, days_, price_, src_) in o_["trips"]:
+        assert a_ != b_ and src_.startswith("http") and (price_ is None or 30 <= price_ <= 140), (a_, b_, price_)
+assert not any(t[3] is not None for k_, o_ in alberta_data.OPERATORS.items() if k_ != "Red Arrow" for t in o_["trips"])
 assert not ({"Piketon", "Jackson", "Batavia", "Peebles", "Seaman"} & set(ohio))                 # Orange Line (2023 file) is not loaded
 assert not ({"Delphos", "Mount Gilead", "Coolville", "Newcomerstown"} & set(ohio))              # reservation only stops are left out
-# every GoBus row: price a multiple of $5 between $5 and the line maximum, arrival after departure, two different places
+# the published GoBus mileage table (RFP 2024 p.45, 2025 p.40) and the FAQ "under 50 miles is $5"
+ef = gobus_data.estimate_fare
+assert [ef(m) for m in (10, 49.9, 50, 74.9, 75, 159.9, 160, 199.9, 200, 400)] == [5, 5, 10, 10, 15, 15, 20, 20, 25, 25]
+assert ef(300, adjacent=True) == 5                                                                  # "Next stop over: $5.00"
+# every GoBus row: price a multiple of $5 between $5 and $25 (changing lines, which can cost more, is not modeled)
 for line, op in gobus_data.OPERATORS.items():
-    top = 25 if line == "Red" else 30
+    top = 25
     for (o_, d_, dep, arr, price, *_rest) in op["trips"]:
         assert price % 5 == 0 and 5 <= price <= top and o_ != d_ and arr > dep, (line, o_, d_, dep, arr, price)
 assert [i["dropped"] for i in gobus_data.DATA_ISSUES] == ["Marietta Armory Square"]             # the one printed time that did not fit
@@ -73,7 +102,15 @@ a = c.post("/clicks", json={"ref": "coop-1", "trip_id": rail["id"], "riders": 2}
 main.setup_database()
 after = {(x["id"]) for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Seward"}).json()}
 assert before == after
+ab_before = [x["id"] for x in c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()]
 db = main.get_db()
+nab = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ? AND t.is_active = ?", ("% (Alberta)", True)).fetchone()["n"]
+assert nab == len(alberta_data.ALBERTA_TRIPS), nab
+db.close()
+main.setup_database()
+assert [x["id"] for x in c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()] == ab_before   # Alberta ids stable
+db = main.get_db()
+assert db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ?", ("% (Alberta)",)).fetchone()["n"] == len(alberta_data.ALBERTA_TRIPS)
 n = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name='Alaska Railroad'").fetchone()["n"]
 assert n == len(arr_data.ARR_TRIPS), n
 n2 = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ? AND t.is_active = ?", ("GoBus %", True)).fetchone()["n"]
