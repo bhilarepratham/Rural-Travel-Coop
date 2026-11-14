@@ -124,6 +124,7 @@ html, body, [class*="css"], .stApp { font-family:'Inter', system-ui, 'Segoe UI',
 
 .st-key-filters { background:#fff; border:1px solid var(--line); border-radius:6px; padding:1rem 1rem .5rem; }
 .st-key-filters h4 { font-size:1.25rem; margin:0 0 .4rem; }
+.st-key-airnote { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem 1.1rem .6rem; margin-top:.4rem; }
 
 /* result cards read like a ticket: times and route line, a perforated edge, then the price */
 [class*="st-key-card-"] { background:#fff; border:1px solid var(--line); border-radius:6px; padding:1rem 1.2rem;
@@ -326,9 +327,29 @@ def minutes(hhmm: str) -> int:
     return int(h) * 60 + int(m)
 
 
+def has_times(t: dict) -> bool:
+    """Alberta listings carry no times (the carriers show times only in their own booking engines)."""
+    return bool(t.get("depart")) and bool(t.get("arrive"))
+
+
 def duration_text(t: dict) -> str:
     mins = minutes(t["arrive"]) - minutes(t["depart"])
     return f"{mins // 60}h {mins % 60:02d}m"
+
+
+def duration_mins(t: dict):
+    return minutes(t["arrive"]) - minutes(t["depart"]) if has_times(t) else None
+
+
+SYMBOL = {"CAD": "CA$"}      # Alberta fares are Canadian dollars; everything else is US dollars shown as $
+
+
+def money(t: dict, amount: float) -> str:
+    return f"{'~' if t.get('fare_estimated') else ''}{SYMBOL.get(t.get('currency'), '$')}{amount:,.0f}"
+
+
+def region_symbol(region: str) -> str:
+    return "CA$" if region == "Alberta" else "$"
 
 
 def clock(hhmm: str) -> str:
@@ -360,8 +381,9 @@ def header(title: str, show_route: bool = False, region: str = "", needs_backend
     st.markdown(
         f"""<div class="topband{'' if big else ' compact'}"><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(sub)}</div>" if sub else ""}
         <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
-        their public schedules, and neither is a partner. GoBus fares are estimates. Trips marked demo are
-        made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
+        their public schedules. Alberta bus listings show which carriers sell a route, with times and fares on the
+        carrier's own site. No operator shown here is a partner. GoBus and Red Arrow fares are estimates. Trips
+        marked demo are made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
     if needs_backend and not ensure_backend():
         st.stop()
 
@@ -372,6 +394,8 @@ def season_text(t: dict) -> str:
         return ""
     if t.get("season_start") and t.get("season_end"):
         return f"{t['days']}. Season {t['season_start']} to {t['season_end']}."
+    if not has_times(t):
+        return f"{t['days']}."
     return f"{t['days']}. No season dates are printed on this timetable."
 
 
@@ -380,8 +404,11 @@ POPULAR = {"Alaska": [("Anchorage", "Seward", "To the coast, by train or bus"),
                       ("Anchorage", "Talkeetna", "On the way to Denali")],
            "Ohio": [("Toledo", "Cincinnati", "Across the state, end to end"),
                     ("Columbus", "Athens", "Southeast to Ohio University"),
-                    ("Columbus", "Pittsburgh", "East across the state line")]}
-DEFAULT_PAIR = {"Alaska": ("Anchorage", "Seward"), "Ohio": ("Toledo", "Cincinnati")}
+                    ("Columbus", "Pittsburgh", "East across the state line")],
+           "Alberta": [("Edmonton", "Calgary", "Four carriers on one corridor"),
+                       ("Edmonton", "Fort McMurray", "North on Highway 63"),
+                       ("Calgary", "Lethbridge", "South to Lethbridge")]}
+DEFAULT_PAIR = {"Alaska": ("Anchorage", "Seward"), "Ohio": ("Toledo", "Cincinnati"), "Alberta": ("Edmonton", "Calgary")}
 
 
 def search_bar(regions: list[dict]) -> None:
@@ -533,8 +560,9 @@ def results_screen() -> None:
     with left.container(key="filters"):
         st.markdown("#### Filter by")
         mode = st.radio("Mode", ["Rail and bus", "Rail only", "Bus only"])
-        top = max([t["price"] for t in trips], default=100)
-        max_price = st.slider("Highest price per rider ($)", 0, int(top) + 1, int(top) + 1) if trips else 0
+        top = max([t["price"] for t in trips if t["price"] is not None], default=100)
+        sym = region_symbol(q.get("region", ""))
+        max_price = st.slider(f"Highest price per rider ({sym})", 0, int(top) + 1, int(top) + 1) if trips else 0
         times = st.multiselect("Departure time", ["Morning (before noon)", "Afternoon (noon to 5 PM)",
                                                   "Evening (after 5 PM)"])
         only_date = st.checkbox("Only trips that run on my date", value=False)
@@ -542,8 +570,8 @@ def results_screen() -> None:
 
     shown = [t for t in trips
              if (mode == "Rail and bus" or t["mode"] == ("Rail" if mode == "Rail only" else "Bus"))
-             and t["price"] <= max_price
-             and (not times or part_of_day(t["depart"]) in times)
+             and (t["price"] is None or t["price"] <= max_price)       # a fare we do not show is never filtered out
+             and (not times or not has_times(t) or part_of_day(t["depart"]) in times)
              and (not only_date or t.get("in_season") is not False)
              and (not only_partner or t["partner"])]
 
@@ -553,19 +581,40 @@ def results_screen() -> None:
                     f"<div class='sub'>{q['date']:%A, %b %d, %Y}</div></div>", unsafe_allow_html=True)
         sort_by = st.segmented_control("Sort by", ["Cheapest", "Earliest departure", "Shortest trip"],
                                        default="Cheapest", key="sort_by", label_visibility="collapsed") or "Cheapest"
-        keys = {"Cheapest": lambda t: t["price"], "Earliest departure": lambda t: t["depart"],
-                "Shortest trip": lambda t: minutes(t["arrive"]) - minutes(t["depart"])}
+        keys = {"Cheapest": lambda t: (t["price"] is None, t["price"] or 0),
+                "Earliest departure": lambda t: (not has_times(t), t["depart"] or ""),
+                "Shortest trip": lambda t: (duration_mins(t) is None, duration_mins(t) or 0)}
         shown.sort(key=keys[sort_by])
 
         if not shown:
             examples = {"Alaska": "Anchorage to Seward or Anchorage to Fairbanks",
-                        "Ohio": "Toledo to Cincinnati or Columbus to Athens"}.get(q.get("region", ""), "another pair of places")
+                        "Ohio": "Toledo to Cincinnati or Columbus to Athens",
+                        "Alberta": "Edmonton to Calgary or Edmonton to Fort McMurray"}.get(q.get("region", ""), "another pair of places")
             st.info("No trips match these filters. Clear a filter, pick another date, or try " + examples + ".")
+            air_note(q.get("region", ""))
             return
-        cheapest = min(shown, key=lambda t: t["price"])
-        fastest = min(shown, key=lambda t: minutes(t["arrive"]) - minutes(t["depart"]))
+        priced = [t for t in shown if t["price"] is not None]
+        timed = [t for t in shown if has_times(t)]
+        cheapest = min(priced, key=lambda t: t["price"]) if priced else None
+        fastest = min(timed, key=duration_mins) if timed else None
         for t in shown:
-            card(t, q["riders"], t is cheapest and len(shown) > 1, t is fastest and len(shown) > 1)
+            card(t, q["riders"], t is cheapest and len(priced) > 1, t is fastest and len(timed) > 1)
+        air_note(q.get("region", ""))
+
+
+def air_note(region: str) -> None:
+    """Alberta only: plain links to the two big airlines. We do not compare or sell flights."""
+    if region != "Alberta":
+        return
+    with st.container(key="airnote"):
+        st.markdown("**Flying instead?** We do not compare flights. Air Canada and WestJet sell their own tickets on their own sites.")
+        c1, c2, _ = st.columns([1, 1, 3])
+        for col, (name, url) in zip((c1, c2), alberta_links()):
+            col.link_button(name, url, width="stretch")
+
+
+def alberta_links() -> list[tuple]:
+    return [("Air Canada", "https://www.aircanada.com"), ("WestJet", "https://www.westjet.com")]
 
 
 def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
@@ -574,7 +623,12 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
         badges.append(badge("Cheapest", "good"))
     if is_fastest:
         badges.append(badge("Fastest", "fast"))
-    badges.append(badge("Demo data, made up", "warn") if t["sample"] else badge("Published schedule, unofficial"))
+    if t["sample"]:
+        badges.append(badge("Demo data, made up", "warn"))
+    elif has_times(t):
+        badges.append(badge("Published schedule, unofficial"))
+    else:
+        badges.append(badge("Route listing, unofficial"))
     if t.get("fare_estimated"):
         badges.append(badge("Fare estimated", "warn"))
     badges.append(badge("Partner operator", "good") if t["partner"] else badge("Listed only"))
@@ -586,17 +640,27 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
     with st.container(key=f"card-{t['id']}"):
         tile, a, b = st.columns([0.9, 3.1, 1.3])
         tile.markdown(f"<div class='modetile {'rail' if t['mode'] == 'Rail' else 'bus'}'>{escape(t['mode'])}</div>", unsafe_allow_html=True)
-        a.markdown(
-            f"""<div class="op">{escape(t['operator'])}<span class="pill">{escape(t['mode'])}</span></div>
-            <div class="trip"><div><div class="t">{clock(t['depart'])}</div>
+        if has_times(t):
+            trip_html = (f"""<div class="trip"><div><div class="t">{clock(t['depart'])}</div>
             <div class="place">{escape(t['from'])}</div></div>
             <div class="bar">{duration_text(t)}</div>
-            <div><div class="t">{clock(t['arrive'])}</div><div class="place">{escape(t['to'])}</div></div></div>
+            <div><div class="t">{clock(t['arrive'])}</div><div class="place">{escape(t['to'])}</div></div></div>""")
+        else:     # a listing: the carrier sells this pair, times are on the carrier's site
+            trip_html = (f"""<div class="trip"><div><div class="t">{escape(t['from'])}</div></div>
+            <div class="bar">to</div><div><div class="t">{escape(t['to'])}</div></div></div>
+            <div class="small">Departure times are shown on the operator's site.</div>""")
+        a.markdown(
+            f"""<div class="op">{escape(t['operator'])}<span class="pill">{escape(t['mode'])}</span></div>
+            {trip_html}
             <div class="badges">{''.join(badges)}</div><div class="small">{escape(season)}</div>""",
             unsafe_allow_html=True)
-        b.markdown(f"""<div class="price"><div class="big">{"~" if t.get("fare_estimated") else ""}${t['price'] * riders:,.0f}</div>
-            <div class="per">{f"${t['price']:,.0f} per rider, {riders} riders" if riders != 1 else "per rider"}</div></div>""",
-                   unsafe_allow_html=True)
+        if t["price"] is None:
+            b.markdown("""<div class="price"><div class="big" style="font-size:1.3rem">Fare on operator site</div>
+            <div class="per">The operator shows the fare</div></div>""", unsafe_allow_html=True)
+        else:
+            b.markdown(f"""<div class="price"><div class="big">{money(t, t['price'] * riders)}</div>
+            <div class="per">{f"{money(t, t['price'])} per rider, {riders} riders" if riders != 1 else "per rider"}</div></div>""",
+                       unsafe_allow_html=True)
         if b.button("Select", key=f"book{t['id']}", type="primary", width="stretch"):
             st.session_state.selected = t
             st.session_state.click_id = None
@@ -611,24 +675,39 @@ def handoff_screen() -> None:
     left, right = st.columns([2, 1], gap="large")
     with left.container(key="summary"):
         st.markdown(f"### {t['operator']} ({t['mode']})")
-        st.markdown(f"**{t['from']}** at {clock(t['depart'])}  \n**{t['to']}** at {clock(t['arrive'])}  \n"
-                    f"{duration_text(t)} | {q['date']:%A, %b %d, %Y}")
+        if has_times(t):
+            st.markdown(f"**{t['from']}** at {clock(t['depart'])}  \n**{t['to']}** at {clock(t['arrive'])}  \n"
+                        f"{duration_text(t)} | {q['date']:%A, %b %d, %Y}")
+        else:
+            st.markdown(f"**{t['from']}** to **{t['to']}**  \nDeparture times are shown on the operator's site | "
+                        f"{q['date']:%A, %b %d, %Y}")
         if t.get("days"):
             st.caption(season_text(t))
         if t.get("in_season") is False:
             st.warning("This trip does not run on the date you searched. Check the season before you buy.")
         if t.get("fare_estimated"):
-            st.warning("This fare is an estimate. The operator publishes a fare range, not a fare for each pair of "
-                       "stops. Check the exact fare on the operator's site before you buy.")
+            if t["operator"].startswith("GoBus"):
+                st.warning("This fare is an estimate. The operator publishes fares by miles, not a fare for each pair of "
+                           "stops, so we work out the miles ourselves. Check the exact fare on the operator's site before you buy.")
+            else:
+                st.warning("This fare is an estimate. The operator shows an average price for some routes, not a fare for each "
+                           "pair of stops, so we estimate it from the distance. Check the exact fare on the operator's site before you buy.")
         st.info("The operator sells and issues your ticket. Refunds and changes follow the operator's rules.")
-        if t.get("source_url"):
+        if t.get("source_url") and has_times(t):
             st.caption(f"Time and fare copied from the operator's public schedule (checked {t.get('last_updated')}). "
                        f"Confirm on the operator's site before you buy. Source: {t['source_url']}")
+        elif t.get("source_url"):
+            st.caption(f"Route listed on a public page (checked {t.get('last_updated')}). Times and the exact fare are on "
+                       f"the operator's site. Source: {t['source_url']}")
     with right.container(key="pricebox"):
         st.markdown("**Price**")
-        st.markdown(f"## {'~' if t.get('fare_estimated') else ''}${t['price'] * q['riders']:,.0f}")
-        st.caption(f"${t['price']:,.0f} x {q['riders']} rider(s). Fare shown by the operator; taxes and fees "
-                   "may apply on their site.")
+        if t["price"] is None:
+            st.markdown("## Fare on operator site")
+            st.caption("We do not show a fare for this route. The operator's site shows the fare and the times.")
+        else:
+            st.markdown(f"## {money(t, t['price'] * q['riders'])}")
+            st.caption(f"{money(t, t['price'])} x {q['riders']} rider(s). Fare shown by the operator; taxes and fees "
+                       "may apply on their site.")
         if t["partner"]:
             st.caption("Disclosure: we may receive a referral fee from this operator if you buy. "
                        "It does not change your price.")
@@ -747,11 +826,13 @@ finished product and it may be wrong or unavailable.
 price, refunds and changes are decided by that operator, and the operator is responsible for them.
 
 **3. Times and prices can be wrong.** We copy them from public schedules, and the date we checked is shown on each
-trip. A fare marked with "~" or "Fare estimated" is our estimate, because the operator publishes a range and not a
-price for each pair of stops. Trips marked demo are made up. Always check the time, price and season on the
-operator's site before you buy.
+trip. A fare marked with "~" or "Fare estimated" is our estimate, because the operator publishes fares by miles and not a
+price for each pair of stops. Alberta bus listings show which carriers sell a route and, where the carrier's page says,
+the days it runs; times and exact fares are on the carrier's own site, and Alberta fares are in Canadian dollars.
+Trips marked demo are made up. Always check the time, price and season on the operator's site before you buy.
 
-**4. No partnership.** Alaska Railroad and GoBus are not partners of this project and have not approved this site.
+**4. No partnership.** Alaska Railroad, GoBus, Red Arrow, FlixBus, Cold Shot, Rider Express, Air Canada and WestJet
+are not partners of this project and have not approved this site.
 Names are used only to say which service a trip belongs to.
 
 **5. Referral fees.** Where a trip says we may receive a referral fee, that fee does not change your price.
