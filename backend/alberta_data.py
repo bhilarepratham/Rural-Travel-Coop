@@ -1,4 +1,4 @@
-"""Alberta bus listings: which carrier sells which pair of towns, from public pages. Unofficial.
+"""Alberta bus listings: which carrier serves which pair of towns, from public pages. Unofficial.
 
 WHAT IS HERE AND WHAT IS NOT. No Alberta carrier publishes a timetable we could read (times appear only inside each
 carrier's booking engine), so these rows have NO departure or arrival times. Each row says: this carrier sells a
