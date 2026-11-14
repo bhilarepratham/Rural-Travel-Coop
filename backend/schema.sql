@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS operators (
     id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name         TEXT NOT NULL UNIQUE,
-    mode         TEXT NOT NULL CHECK (mode IN ('Rail', 'Bus')),
+    mode         TEXT NOT NULL CHECK (mode IN ('Rail', 'Bus', 'Air')),
     is_partner   BOOLEAN NOT NULL DEFAULT FALSE,
     booking_url  TEXT,
     notes        TEXT
@@ -71,3 +71,8 @@ CREATE TABLE IF NOT EXISTS partner_weekly_reports (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (operator_id, week_start, route_label)
 );
+
+-- Older databases were created when mode could only be Rail or Bus. Widen the check so airline rows (mode Air) can be saved.
+-- Safe to run again: it drops the old check if there is one and adds the current one.
+ALTER TABLE operators DROP CONSTRAINT IF EXISTS operators_mode_check;
+ALTER TABLE operators ADD CONSTRAINT operators_mode_check CHECK (mode IN ('Rail', 'Bus', 'Air'));
