@@ -1,14 +1,3 @@
-"""Backend API for the Rural Travel Co-op prototype (sample data only).
-
-Run locally:  uvicorn main:app --reload      (from the backend folder)
-API docs:     http://localhost:8000/docs
-
-Done on Day 1:  /health, /cities, /trips
-Day 5: /members saves sign ups (free Tier 1 or paid Tier 2) and /members/count summarizes them.
-Day 4: /clicks logs referral clicks in SQLite and /clicks/report summarizes them.
-Day 2: trips now live in a database instead of a Python list.
-Week 9 Day 2: set DATABASE_URL to use hosted Postgres (Neon); without it a local SQLite file is used.
-"""
 import os
 import sqlite3
 from pathlib import Path
@@ -18,15 +7,13 @@ from typing import Optional
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+import alberta_data
 import arr_data
 import gobus_data
 from data import TRIPS
 
 app = FastAPI(title="Rural Travel Co-op API (prototype)")
 
-# Week 9 Day 2: if the DATABASE_URL environment variable is set (the Neon connection string),
-# the API uses that hosted Postgres database. If it is not set, it uses a local SQLite file,
-# so running on your own computer still works with no setup.
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 USE_POSTGRES = DATABASE_URL.startswith("postgres")
 DB_PATH = Path(__file__).parent / "trips.db"
@@ -117,6 +104,7 @@ def setup_database() -> None:
     seed_demo_trips(db)
     load_arr_trips(db)
     load_gobus_trips(db)
+    load_alberta_trips(db)
     db.commit()
     db.close()
 
@@ -220,6 +208,46 @@ def load_gobus_trips(db: Db) -> None:
                 db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
 
 
+def load_alberta_trips(db: Db) -> None:
+    """Load the Alberta bus listings (Red Arrow, Flix, Cold Shot, Rider Express), one operator each.
+    These rows have no times: depart_time and arrive_time are stored as empty text and price 0 means "no fare shown"
+    (the API turns both into null). A row is found by operator, origin and destination. Only Red Arrow rows carry a
+    fare, and it is an estimate (see alberta_data.py), so only those rows are flagged fare_estimated."""
+    for key, op in alberta_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, price, days_running, source_url, last_updated, "
+                            "is_active, fare_estimated FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"])] = r
+        wanted = set()
+        for (origin, dest, days, price, src) in op["trips"]:
+            wanted.add((origin, dest))
+            price_db = price if price is not None else 0
+            estimated = price is not None
+            r = existing.get((origin, dest))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, "
+                    "days_running, season_start, season_end, booking_url, source_url, last_updated, is_sample, "
+                    "is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, "", "", price_db, days, None, None, op["booking_url"], src,
+                     alberta_data.CHECKED, False, True, estimated))
+                continue
+            same = (float(r["price"]) == float(price_db) and r["days_running"] == days and r["source_url"] == src
+                    and str(r["last_updated"]) == alberta_data.CHECKED and bool(r["is_active"])
+                    and bool(r["fare_estimated"]) == estimated)
+            if not same:
+                db.execute(
+                    "UPDATE trips SET depart_time = ?, arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    ("", "", price_db, days, None, None, op["booking_url"], src, alberta_data.CHECKED, False, True,
+                     estimated, r["id"]))
+        for k, r in existing.items():
+            if k not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
+
+
 setup_database()
 
 
@@ -241,6 +269,10 @@ REGION_OF = {
 # Every other GoBus place (Columbus, Athens, Cleveland, ...). The "Ohio" region is the GoBus network,
 # so it includes a few stops just over the border (Parkersburg and Wheeling WV, Pittsburgh PA).
 REGION_OF.update({c: "Ohio" for c in gobus_data.GOBUS_CITIES})
+# Alberta bus listings (Canadian dollars). Lloydminster sits on the Alberta and Saskatchewan border; its listings
+# come from sources that label it Lloydminster, AB.
+REGION_OF.update({c: "Alberta" for c in alberta_data.ALBERTA_CITIES})
+CURRENCY = {"Alberta": "CAD"}      # every other region is US dollars
 
 
 def active_cities() -> list[str]:
@@ -294,14 +326,16 @@ def search_trips(
     if mode:
         sql += " AND lower(o.mode) = lower(?)"
         params.append(mode)
-    sql += " ORDER BY t.price"
+    sql += " ORDER BY (t.price = 0), t.price"     # rows with no fare shown (price 0) go last
     db = get_db()
     rows = db.execute(sql, tuple(params)).fetchall()
     db.close()
-    # Keep the same field names the frontend already uses ("from" and "to")
+    # Keep the same field names the frontend already uses ("from" and "to").
+    # Alberta listings have no times and some have no fare: those come back as null.
     return [{"id": r["id"], "from": r["origin"], "to": r["destination"],
-             "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"],
-             "arrive": r["arrive_time"], "price": float(r["price"]),
+             "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"] or None,
+             "arrive": r["arrive_time"] or None, "price": float(r["price"]) if float(r["price"]) > 0 else None,
+             "currency": CURRENCY.get(REGION_OF.get(r["origin"], ""), "USD"),
              "partner": bool(r["is_partner"]), "url": r["url"],
              "sample": bool(r["is_sample"]), "fare_estimated": bool(r["fare_estimated"]), "days": r["days_running"],
              "season_start": str(r["season_start"]) if r["season_start"] else None,
