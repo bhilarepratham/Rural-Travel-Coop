@@ -1,3 +1,14 @@
+"""Backend API for the Rural Travel Co-op prototype (sample data only).
+
+Run locally:  uvicorn main:app --reload      (from the backend folder)
+API docs:     http://localhost:8000/docs
+
+Done on Day 1:  /health, /cities, /trips
+Day 5: /members saves sign ups (free Tier 1 or paid Tier 2) and /members/count summarizes them.
+Day 4: /clicks logs referral clicks in SQLite and /clicks/report summarizes them.
+Day 2: trips now live in a database instead of a Python list.
+Week 9 Day 2: set DATABASE_URL to use hosted Postgres (Neon); without it a local SQLite file is used.
+"""
 import os
 import sqlite3
 from pathlib import Path
@@ -9,11 +20,15 @@ from pydantic import BaseModel, Field
 
 import alberta_data
 import arr_data
+import flight_data
 import gobus_data
 from data import TRIPS
 
 app = FastAPI(title="Rural Travel Co-op API (prototype)")
 
+# Week 9 Day 2: if the DATABASE_URL environment variable is set (the Neon connection string),
+# the API uses that hosted Postgres database. If it is not set, it uses a local SQLite file,
+# so running on your own computer still works with no setup.
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 USE_POSTGRES = DATABASE_URL.startswith("postgres")
 DB_PATH = Path(__file__).parent / "trips.db"
@@ -105,6 +120,7 @@ def setup_database() -> None:
     load_arr_trips(db)
     load_gobus_trips(db)
     load_alberta_trips(db)
+    load_flight_trips(db)
     db.commit()
     db.close()
 
@@ -248,6 +264,44 @@ def load_alberta_trips(db: Db) -> None:
                 db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
 
 
+def load_flight_trips(db: Db) -> None:
+    """Load the airline route listings (Alaska Airlines, Grant, Aleutian, Ravn in Alaska; Air Canada and WestJet in
+    Alberta), one operator each. Same shape as the Alberta bus listings: no times (empty text), price 0 meaning
+    "no fare shown", no fare estimate. A row is found by operator, origin and destination; a row no longer in
+    flight_data.py is hidden."""
+    for key, op in flight_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, price, days_running, source_url, last_updated, "
+                            "is_active, fare_estimated FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"])] = r
+        wanted = set()
+        for (origin, dest, days, price, src) in op["trips"]:
+            wanted.add((origin, dest))
+            r = existing.get((origin, dest))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, "
+                    "days_running, season_start, season_end, booking_url, source_url, last_updated, is_sample, "
+                    "is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, "", "", 0, days, None, None, op["booking_url"], src,
+                     flight_data.CHECKED, False, True, False))
+                continue
+            same = (float(r["price"]) == 0.0 and r["days_running"] == days and r["source_url"] == src
+                    and str(r["last_updated"]) == flight_data.CHECKED and bool(r["is_active"])
+                    and not bool(r["fare_estimated"]))
+            if not same:
+                db.execute(
+                    "UPDATE trips SET depart_time = ?, arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    ("", "", 0, days, None, None, op["booking_url"], src, flight_data.CHECKED, False, True,
+                     False, r["id"]))
+        for k, r in existing.items():
+            if k not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
+
+
 setup_database()
 
 
@@ -272,6 +326,8 @@ REGION_OF.update({c: "Ohio" for c in gobus_data.GOBUS_CITIES})
 # Alberta bus listings (Canadian dollars). Lloydminster sits on the Alberta and Saskatchewan border; its listings
 # come from sources that label it Lloydminster, AB.
 REGION_OF.update({c: "Alberta" for c in alberta_data.ALBERTA_CITIES})
+# Places that only airlines serve (Juneau, Nome, Kodiak, ...).
+REGION_OF.update({c: "Alaska" for c in flight_data.ALASKA_AIR_CITIES})
 CURRENCY = {"Alberta": "CAD"}      # every other region is US dollars
 
 
@@ -313,7 +369,7 @@ def season_status(start, end, on: Optional[date]) -> Optional[bool]:
 def search_trips(
     origin: str = Query(..., description="Departure city"),
     destination: str = Query(..., description="Arrival city"),
-    mode: Optional[str] = Query(None, description="Rail or Bus. Leave empty for both."),
+    mode: Optional[str] = Query(None, description="Rail, Bus or Air. Leave empty for all."),
     on: Optional[date] = Query(None, description="Travel date (YYYY-MM-DD). Adds an in_season flag."),
 ) -> list[dict]:
     """Return active trips for a route from the database, cheapest first."""
