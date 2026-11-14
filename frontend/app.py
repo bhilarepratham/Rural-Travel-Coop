@@ -211,7 +211,7 @@ html, body, [class*="css"], .stApp { font-family:'Inter', system-ui, 'Segoe UI',
 .pill { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:600; }
 .modetile { width:5.2rem; height:5.2rem; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff;
             font-weight:800; font-size:1.05rem; letter-spacing:.04em; text-transform:uppercase; }
-.modetile.rail { background:var(--nav); } .modetile.bus { background:#0b7a8a; }
+.modetile.rail { background:var(--nav); } .modetile.bus { background:#0b7a8a; } .modetile.air { background:#5b4b8a; }
 .trip .t { font-size:1.75rem; font-weight:800; font-family:var(--display); letter-spacing:-.01em; }
 .price .big { font-size:2.1rem; font-weight:800; font-family:var(--display); letter-spacing:-.01em; }
 .price { text-align:right; }
@@ -377,11 +377,11 @@ def header(title: str, show_route: bool = False, region: str = "", needs_backend
             "m.name=x.split(':')[0];m.content=x.split(':')[1]||'';h.appendChild(m);});\">")
     nav()
     big = show_route
-    sub = "Compare rail and bus between small towns, then book directly with the operator." if big else (region or "")
+    sub = "Compare rail, bus and flights between small towns, then book directly with the operator." if big else (region or "")
     st.markdown(
         f"""<div class="topband{'' if big else ' compact'}"><h1>{escape(title)}</h1>{f"<div class='tag'>{escape(sub)}</div>" if sub else ""}
         <div class="notice">Unofficial research prototype. Alaska Railroad and GoBus (Ohio) times are copied from
-        their public schedules. Alberta bus listings show which carriers sell a route, with times and fares on the
+        their public schedules. Alberta bus listings and all airline listings show which carriers sell a route, with times and fares on the
         carrier's own site. No operator shown here is a partner. GoBus and Red Arrow fares are estimates. Trips
         marked demo are made up. Always confirm with the operator before you buy.</div></div>""", unsafe_allow_html=True)
     if needs_backend and not ensure_backend():
@@ -510,7 +510,7 @@ def search_screen() -> None:
         return
     search_bar(regions)
     st.markdown("<div class='trust'><span>Free to use, no account needed</span>"
-                "<span>Rail and bus together in one search</span>"
+                "<span>Rail, bus and flights listed together</span>"
                 "<span>You book with the operator, refunds follow their rules</span></div>",
                 unsafe_allow_html=True)
     region = st.session_state.get("region_pick", st.session_state.query.get("region", "Alaska"))
@@ -559,7 +559,7 @@ def results_screen() -> None:
     left, right = st.columns([1, 3], gap="large")
     with left.container(key="filters"):
         st.markdown("#### Filter by")
-        mode = st.radio("Mode", ["Rail and bus", "Rail only", "Bus only"])
+        mode = st.radio("Mode", ["All modes", "Rail only", "Bus only", "Air only"])
         top = max([t["price"] for t in trips if t["price"] is not None], default=100)
         sym = region_symbol(q.get("region", ""))
         max_price = st.slider(f"Highest price per rider ({sym})", 0, int(top) + 1, int(top) + 1) if trips else 0
@@ -569,7 +569,7 @@ def results_screen() -> None:
         only_partner = st.checkbox("Partner operators only", value=False)
 
     shown = [t for t in trips
-             if (mode == "Rail and bus" or t["mode"] == ("Rail" if mode == "Rail only" else "Bus"))
+             if (mode == "All modes" or t["mode"] == {"Rail only": "Rail", "Bus only": "Bus", "Air only": "Air"}[mode])
              and (t["price"] is None or t["price"] <= max_price)       # a fare we do not show is never filtered out
              and (not times or not has_times(t) or part_of_day(t["depart"]) in times)
              and (not only_date or t.get("in_season") is not False)
@@ -591,7 +591,7 @@ def results_screen() -> None:
                         "Ohio": "Toledo to Cincinnati or Columbus to Athens",
                         "Alberta": "Edmonton to Calgary or Edmonton to Fort McMurray"}.get(q.get("region", ""), "another pair of places")
             st.info("No trips match these filters. Clear a filter, pick another date, or try " + examples + ".")
-            air_note(q.get("region", ""))
+            air_note(q.get("region", ""), any(t["mode"] == "Air" for t in trips))
             return
         priced = [t for t in shown if t["price"] is not None]
         timed = [t for t in shown if has_times(t)]
@@ -599,15 +599,22 @@ def results_screen() -> None:
         fastest = min(timed, key=duration_mins) if timed else None
         for t in shown:
             card(t, q["riders"], t is cheapest and len(priced) > 1, t is fastest and len(timed) > 1)
-        air_note(q.get("region", ""))
+        air_note(q.get("region", ""), any(t["mode"] == "Air" for t in shown))
 
 
-def air_note(region: str) -> None:
-    """Alberta only: plain links to the two big airlines. We do not compare or sell flights."""
-    if region != "Alberta":
+def air_note(region: str, has_air: bool) -> None:
+    """Flights are listed like any other trip. This note covers the gaps: Ohio has no flights between its cities,
+    and an Alberta pair with no listed flight still gets plain links to the two big airlines."""
+    if region == "Ohio":
+        with st.container(key="airnote"):
+            st.markdown("**Flying instead?** Airlines serve Columbus, Cleveland, Cincinnati, Dayton, Akron-Canton and "
+                        "Toledo mainly with flights to other states. We found no scheduled flights between Ohio cities, "
+                        "so none are listed here.")
+        return
+    if region != "Alberta" or has_air:
         return
     with st.container(key="airnote"):
-        st.markdown("**Flying instead?** We do not compare flights. Air Canada and WestJet sell their own tickets on their own sites.")
+        st.markdown("**Flying instead?** No flight is listed for this pair. Air Canada and WestJet sell their own tickets on their own sites.")
         c1, c2, _ = st.columns([1, 1, 3])
         for col, (name, url) in zip((c1, c2), alberta_links()):
             col.link_button(name, url, width="stretch")
@@ -639,7 +646,7 @@ def card(t: dict, riders: int, is_cheapest: bool, is_fastest: bool) -> None:
     season = season_text(t)
     with st.container(key=f"card-{t['id']}"):
         tile, a, b = st.columns([0.9, 3.1, 1.3])
-        tile.markdown(f"<div class='modetile {'rail' if t['mode'] == 'Rail' else 'bus'}'>{escape(t['mode'])}</div>", unsafe_allow_html=True)
+        tile.markdown(f"<div class='modetile {t['mode'].lower() if t['mode'] in ('Rail', 'Bus', 'Air') else 'bus'}'>{escape(t['mode'])}</div>", unsafe_allow_html=True)
         if has_times(t):
             trip_html = (f"""<div class="trip"><div><div class="t">{clock(t['depart'])}</div>
             <div class="place">{escape(t['from'])}</div></div>
@@ -827,12 +834,12 @@ price, refunds and changes are decided by that operator, and the operator is res
 
 **3. Times and prices can be wrong.** We copy them from public schedules, and the date we checked is shown on each
 trip. A fare marked with "~" or "Fare estimated" is our estimate, because the operator publishes fares by miles and not a
-price for each pair of stops. Alberta bus listings show which carriers sell a route and, where the carrier's page says,
+price for each pair of stops. Alberta bus listings and all airline listings show which carriers sell a route and, where the carrier's page says,
 the days it runs; times and exact fares are on the carrier's own site, and Alberta fares are in Canadian dollars.
 Trips marked demo are made up. Always check the time, price and season on the operator's site before you buy.
 
-**4. No partnership.** Alaska Railroad, GoBus, Red Arrow, FlixBus, Cold Shot, Rider Express, Air Canada and WestJet
-are not partners of this project and have not approved this site.
+**4. No partnership.** Alaska Railroad, GoBus, Red Arrow, FlixBus, Cold Shot, Rider Express, Air Canada, WestJet, Alaska Airlines,
+Grant Aviation, Aleutian Airways and Ravn Alaska are not partners of this project and have not approved this site.
 Names are used only to say which service a trip belongs to.
 
 **5. Referral fees.** Where a trip says we may receive a referral fee, that fee does not change your price.
