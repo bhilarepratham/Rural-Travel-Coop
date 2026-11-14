@@ -97,6 +97,58 @@ at = search("Ohio", "Toledo", "Cincinnati")
 next(b for b in at.button if b.label == "Select").click(); at.run()
 ok(at.session_state.step == "handoff" and any("estimate" in w.value for w in at.warning), "Ohio handoff warns the fare is an estimate")
 
+# ---- Alberta: listings without times; Red Arrow has an estimated fare in Canadian dollars ----
+def price_texts(at):
+    return [re.search(r'class="big"[^>]*>([^<]+)', m.value).group(1) for m in at.markdown if 'class="price"' in m.value]
+at = search("Alberta", "Edmonton", "Calgary")
+ok(not at.exception and len(card_ops(at)) == 4, "Alberta Edmonton to Calgary shows 4 carrier cards")
+ok(card_ops(at)[0].startswith("Red Arrow (Alberta)") and {o.split("<")[0] for o in card_ops(at)} <= {"Red Arrow (Alberta)", "FlixBus (Alberta)", "Cold Shot (Alberta)", "Rider Express (Alberta)"}, "Alberta carriers are named")
+ok(price_texts(at) == ["~CA$72", "Fare on operator site", "Fare on operator site", "Fare on operator site"], f"Red Arrow estimate first, others say fare on operator site ({price_texts(at)})")
+ok(not any('class="t">' in m.value and ("AM" in m.value or "PM" in m.value) for m in at.markdown if 'class="op"' in m.value), "Alberta cards show no clock times")
+ok(sum("Departure times are shown on the operator" in m.value for m in at.markdown) == 4 and any("Route listing, unofficial" in m.value for m in at.markdown), "Alberta cards say times are on the operator's site")
+ok(not any("Cheapest" in m.value or "Fastest" in m.value for m in at.markdown if 'class="badges"' in m.value), "no Cheapest or Fastest badge when only one fare or no times are known")
+ok(any("Flying instead?" in m.value for m in at.markdown), "Alberta results offer plain links to Air Canada and WestJet")
+ok(not any("Flying instead?" in m.value for m in search("Ohio", "Toledo", "Cincinnati").markdown), "no airline note outside Alberta")
+for how in ("Earliest departure", "Shortest trip", "Cheapest"):
+    at.segmented_control(key="sort_by").set_value(how).run()
+    ok(not at.exception and len(card_ops(at)) == 4, f"Alberta sort by {how} does not crash and keeps 4 cards")
+ms = next(m for m in at.multiselect if m.label == "Departure time")
+ms.set_value(["Morning (before noon)"]).run()
+ok(len(card_ops(at)) == 4, "time filter keeps Alberta listings (their times are unknown)")
+ok(next(sl for sl in at.slider if sl.label.startswith("Highest price per rider")).label.endswith("(CA$)"), "price filter is labeled in CA$")
+next(r for r in at.radio if r.label == "Mode").set_value("Rail only").run()
+ok(len(card_ops(at)) == 0 and any("Edmonton to Calgary" in i.value for i in at.info), "Alberta Rail only shows an Alberta example in the empty message")
+at = search("Alberta", "Edmonton", "Fort McMurray")
+ok(price_texts(at)[0] == "~CA$97" and len(card_ops(at)) == 3, f"Edmonton to Fort McMurray: Red Arrow ~CA$97 plus Cold Shot and Rider Express ({price_texts(at)})")
+at = search("Alberta", "Gibbons", "Radway")
+ok(len(card_ops(at)) == 1 and price_texts(at) == ["Fare on operator site"], "short Red Arrow pair shows no estimate")
+at = search("Alberta", "Calgary", "Lethbridge")
+ok(len(card_ops(at)) == 1 and card_ops(at)[0].startswith("FlixBus (Alberta)"), "Calgary to Lethbridge is Flix only")
+at = search("Alberta", "Red Deer", "Fort McMurray")
+ok(len(card_ops(at)) == 1 and card_ops(at)[0].startswith("Red Arrow (Alberta)"), "Red Deer to Fort McMurray is Red Arrow only")
+ok(any("Mon, Tue, Wed, Thu, Sun" in m.value for m in at.markdown), "Red Arrow days from the route page are shown")
+# riders multiply the estimate
+at = AppTest.from_file("frontend/app.py", default_timeout=60)
+at.session_state["step"] = "results"; at.session_state["selected"] = None; at.session_state["click_id"] = None
+at.session_state["query"] = {"region": "Alberta", "from": "Edmonton", "to": "Calgary", "date": date.today(), "riders": 2}
+at.run()
+ok(price_texts(at)[0] == "~CA$144", f"two riders: ~CA$144 ({price_texts(at)[0]})")
+# handoff for the priced listing and for an unpriced one
+at = search("Alberta", "Edmonton", "Calgary")
+btns = [b for b in at.button if b.label == "Select"]
+btns[0].click(); at.run()
+ok(at.session_state.step == "handoff" and any("average price for some routes" in w.value for w in at.warning), "Red Arrow handoff warns the fare is an estimate")
+ok(any("Departure times are shown on the operator" in m.value for m in at.markdown) and any("CA$72" in m.value for m in at.markdown), "Red Arrow handoff shows no time and CA$72")
+ok(not any(w.value.startswith("This fare is an estimate. The operator publishes fares by miles") for w in at.warning), "Alberta handoff does not use the GoBus wording")
+at = search("Alberta", "Edmonton", "Calgary")
+[b for b in at.button if b.label == "Select"][1].click(); at.run()
+ok(at.session_state.step == "handoff" and any("Fare on operator site" in m.value for m in at.markdown) and not at.warning, "unpriced listing hands off with no fare and no estimate warning")
+# switch region to Alberta on the search bar
+at = search("Alaska", "Anchorage", "Seward")
+next(s for s in at.selectbox if s.label == "Where are you travelling?").select("Alberta").run()
+frm = next(s for s in at.selectbox if s.label == "From"); to = next(s for s in at.selectbox if s.label == "To")
+ok("Edmonton" in frm.options and "Anchorage" not in frm.options and frm.value == "Edmonton" and to.value == "Calgary", "Alberta search bar lists Alberta places and defaults to Edmonton to Calgary")
+
 # switch region on the search bar
 at = search("Alaska", "Anchorage", "Seward")
 sel = next(s for s in at.selectbox if s.label == "Where are you travelling?")
@@ -106,7 +158,7 @@ ok("Toledo" in frm.options and "Anchorage" not in frm.options, "switching to Ohi
 frm = next(s for s in at.selectbox if s.label == "From"); to = next(s for s in at.selectbox if s.label == "To")
 ok(frm.value == "Toledo" and to.value == "Cincinnati", "Ohio search bar defaults to Toledo to Cincinnati")
 # popular route tiles lead to results for each region
-for region, pairs in (("Alaska", None), ("Ohio", None)):
+for region, pairs in (("Alaska", None), ("Ohio", None), ("Alberta", None)):
     at = AppTest.from_file("frontend/app.py", default_timeout=60)
     at.session_state["step"] = "search"; at.session_state["selected"] = None; at.session_state["click_id"] = None
     at.session_state["query"] = {"region": region, "from": "x", "to": "y", "date": date.today(), "riders": 1}
