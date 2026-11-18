@@ -839,7 +839,7 @@ the days it runs; times and exact fares are on the carrier's own site, and Alber
 Trips marked demo are made up. Always check the time, price and season on the operator's site before you buy.
 
 **4. No partnership.** Alaska Railroad, GoBus, Red Arrow, FlixBus, Cold Shot, Rider Express, Air Canada, WestJet, Alaska Airlines,
-Grant Aviation, Aleutian Airways and Ravn Alaska are not partners of this project and have not approved this site.
+Grant Aviation, Aleutian Airways and Air North are not partners of this project and have not approved this site.
 Names are used only to say which service a trip belongs to.
 
 **5. Referral fees.** Where a trip says we may receive a referral fee, that fee does not change your price.
