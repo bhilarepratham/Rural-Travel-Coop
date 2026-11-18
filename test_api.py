@@ -29,7 +29,7 @@ assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Ancho
                         | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]} | set(alberta_data.ALBERTA_CITIES) | set(flight_data.ALASKA_AIR_CITIES)), cities
 assert c.get("/cities", params={"region": "Ohio"}).json() == sorted({x for t in gobus_data.GOBUS_TRIPS for x in t[:2]})
 
-# GoBus (Ohio): eight lines, one operator each. Fares are estimates in $5 steps, flagged on every row.
+# GoBus (Ohio): nine lines, one operator each. Fares are estimates in $5 steps, flagged on every row.
 g = c.get("/trips", params={"origin": "Toledo", "destination": "Cincinnati", "on": "2027-01-15"}).json()
 assert len(g) == 2 and all(x["fare_estimated"] and x["operator"] == "GoBus Red Line (Ohio)" and x["in_season"] is True for x in g), g
 assert all(5 <= x["price"] <= 25 for x in g)                      # Red Line brochure: $5 to $25
@@ -91,7 +91,11 @@ for o_ in alberta_data.OPERATORS.values():
     for (a_, b_, days_, price_, src_) in o_["trips"]:
         assert a_ != b_ and src_.startswith("http") and (price_ is None or 30 <= price_ <= 140), (a_, b_, price_)
 assert not any(t[3] is not None for k_, o_ in alberta_data.OPERATORS.items() if k_ != "Red Arrow" for t in o_["trips"])
-assert not ({"Piketon", "Jackson", "Batavia", "Peebles", "Seaman"} & set(ohio))                 # Orange Line (2023 file) is not loaded
+assert {"Jackson", "Batavia", "Seaman", "Arlington Heights"} <= set(ohio) and not ({"Piketon", "Peebles"} & set(ohio))   # Orange Line (Sept 14, 2026 file) is loaded
+oc = c.get("/trips", params={"origin": "Cincinnati", "destination": "Athens"}).json()
+assert len(oc) == 2 and {x["operator"] for x in oc} == {"GoBus Orange Line (Ohio)"}, oc
+gt = c.get("/trips", params={"origin": "Painesville", "destination": "Ashtabula"}).json()
+assert gt and {x["operator"] for x in gt} == {"GoBus Gray Line (Ohio)"}, gt
 assert not ({"Delphos", "Mount Gilead", "Coolville", "Newcomerstown"} & set(ohio))              # reservation only stops are left out
 # the published GoBus mileage table (RFP 2024 p.45, 2025 p.40) and the FAQ "under 50 miles is $5"
 ef = gobus_data.estimate_fare
