@@ -1,8 +1,12 @@
-"""GoBus (Ohio) trips for eight lines, built from the printed and posted timetables. Unofficial.
+"""GoBus (Ohio) trips for all nine lines, built from the printed and posted timetables. Unofficial.
 
 Sources: the GoBus Red Line brochure (May 2026) and the schedule PDFs on ridegobus.com for the Green,
-Purple, Gray, Lime, Pink, Blue and Yellow lines (see gobus_lines.json for each file and its date).
-The Orange Line is NOT loaded: the only schedule found is dated 2023 and GoBus says it has changed.
+Purple, Gray, Lime, Pink, Blue, Yellow and Orange lines (see gobus_lines.json for each file and its date).
+Checked against the GoBus Travel Alerts page on 2026-11-18: the Orange, Blue and Gray timetables changed on
+September 14, 2026 and are loaded from the new PDFs (Orange lost Peebles and Piketon and Jackson became a regular
+stop; Blue lost Marietta and Athens Community Center on schedules 12 and 13; Gray gained Cleveland Cedar-University
+and has later Painesville and Ashtabula times). The Pink Line changed on July 27, 2026 and is already loaded from
+that file. The alerts page lists no change to the Green, Purple, Lime, Yellow or Red lines.
 
 The timetables list departure times only, so the "arrive" time of a trip is the listed time at the
 destination stop. Each place is one city: a rider boards or gets off at the FIRST stop listed for that
@@ -13,8 +17,12 @@ FARES ARE ESTIMATES. GoBus publishes no fare for each pair of stops. It does pub
 2024 and 2025 requests for proposals (pages 45 and 40) say one way fares are "currently based on mileage":
 next stop over $5, under 75 miles $10, 75 to 159 miles $15, 160 to 199 miles $20, 200 miles or more $25.
 Its FAQ adds that a trip under 50 miles on one line is $5, and its Red Line brochure (and a county listing for the Gray Line) say all
-fares on those lines are $5 to $25. Fares above $25 (up to $40) come from changing lines, which this file
-does not model. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
+fares on those lines are $5 to $25. GoBus's own ticket page now lists base fares of "$5, $10, $15, $20, $25, or $30" and says the one way
+maximum is $40 when changing lines. It publishes no distance rule for the $30 fare, so this file still stops at $25
+for a trip of 200 miles or more on one line; a few very long trips may really cost $30. Sales tax and a service
+charge ($2.50 on the booking site) are added on top of the base fare. A March 2026 news story gives $40 for Yellow
+Springs to Toledo, which is on one line and does not fit any other published fare; it is treated as unconfirmed.
+Changing lines is not modeled. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
 miles between town centers along the route times a road factor of 1.12. The factor is an assumption: 1.09 to
 1.16 reproduces six one way fares found in news and an unofficial fare listing, and the $25 top fare on the Red Line. Every row from this file is flagged fare_estimated and shown that way."""
 import json
@@ -22,7 +30,7 @@ import math
 from pathlib import Path
 
 BOOKING_URL = "https://booking.ridegobus.com"
-CHECKED = "2026-11-04"
+CHECKED = "2026-11-18"
 RED_SEASON = ("2026-05-01", "2027-04-30")   # printed on the Red Line brochure; other lines print none
 DAYS = "Daily"
 ROAD_FACTOR = 1.12
@@ -52,6 +60,8 @@ CITY_XY = {
     "St Clairsville": (40.0803, -80.9007), "Steubenville": (40.3698, -80.6340), "Upper Sandusky": (40.8273, -83.2810),
     "Utica": (40.2326, -82.4510), "Van Wert": (40.8695, -84.5841), "Wheeling": (40.0640, -80.7209),
     "Wooster": (40.8051, -81.9351), "Zanesville": (39.9403, -82.0132),
+    "Arlington Heights": (39.2103, -84.4655), "Batavia": (39.0770, -84.1764), "Seaman": (38.9645, -83.5735),
+    "Jackson": (39.0526, -82.6358),
 }
 
 # ---- Red Line, as printed (departure time of each bus at each stop) ----
@@ -161,7 +171,7 @@ def trips_for(seq: dict) -> list[tuple]:
     return out
 
 
-LINE_NAMES = ["Red", "Green", "Purple", "Gray", "Lime", "Pink", "Blue", "Yellow"]
+LINE_NAMES = ["Red", "Green", "Purple", "Gray", "Lime", "Pink", "Blue", "Yellow", "Orange"]
 _META = json.loads((Path(__file__).parent / "gobus_lines.json").read_text())["meta"]
 _SEQS = sequences_red() + sequences_other()
 
