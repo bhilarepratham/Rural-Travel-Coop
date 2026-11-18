@@ -1,7 +1,8 @@
 import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from fastapi.testclient import TestClient
-import alberta_data, arr_data, gobus_data, main
+import alberta_data
+import flight_data, arr_data, gobus_data, main
 
 # A leftover made up "Sample Railroad" trip from the old seed data, with a click on it
 db = main.get_db()
@@ -25,7 +26,7 @@ assert "Anchorage" in c.get("/cities", params={"region": "Alaska"}).json()
 assert c.get("/cities", params={"region": "Nowhere"}).json() == []
 cities = c.get("/cities").json()
 assert cities == sorted({x for t in arr_data.ARR_TRIPS for x in t[:2]} | {"Anchorage", "Seward"}
-                        | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]} | set(alberta_data.ALBERTA_CITIES)), cities
+                        | {x for t in gobus_data.GOBUS_TRIPS for x in t[:2]} | set(alberta_data.ALBERTA_CITIES) | set(flight_data.ALASKA_AIR_CITIES)), cities
 assert c.get("/cities", params={"region": "Ohio"}).json() == sorted({x for t in gobus_data.GOBUS_TRIPS for x in t[:2]})
 
 # GoBus (Ohio): eight lines, one operator each. Fares are estimates in $5 steps, flagged on every row.
@@ -49,7 +50,10 @@ assert len(ohio) == len(gobus_data.GOBUS_CITIES) >= 50 and "Athens" in ohio and 
 # ---- Alberta: listings with no times; only Red Arrow rows carry an estimated fare (Canadian dollars) ----
 ef_ab = alberta_data.estimate_fare
 assert ef_ab(149.9) is None and ef_ab(150) == 34 and ef_ab(315) == 72 and ef_ab(424) == 98 and ef_ab(582) == 134
-ab = c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()
+ab_all = c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()
+assert {x["operator"] for x in ab_all if x["mode"] == "Air"} == {"Air Canada", "WestJet", "Air North"}
+assert [x["operator"] for x in c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary", "mode": "Air"}).json()].count("WestJet") == 1
+ab = [x for x in ab_all if x["mode"] == "Bus"]
 assert {x["operator"] for x in ab} == {"Red Arrow (Alberta)", "FlixBus (Alberta)", "Cold Shot (Alberta)", "Rider Express (Alberta)"}, ab
 assert all(x["depart"] is None and x["arrive"] is None and x["currency"] == "CAD" and x["mode"] == "Bus" for x in ab)
 assert ab[0]["operator"] == "Red Arrow (Alberta)" and ab[0]["price"] == 72.0 and ab[0]["fare_estimated"] is True   # priced first
@@ -61,8 +65,26 @@ assert c.get("/trips", params={"origin": "Gibbons", "destination": "Radway"}).js
 rd = c.get("/trips", params={"origin": "Red Deer", "destination": "Fort McMurray"}).json()
 assert rd[0]["days"] == "Mon, Tue, Wed, Thu, Sun" and rd[0]["price"] == 134.0
 assert c.get("/trips", params={"origin": "Fort McMurray", "destination": "Red Deer"}).json()[0]["days"] == "Days not shown on the route page"
-assert len(c.get("/trips", params={"origin": "Calgary", "destination": "Lethbridge"}).json()) == 1       # Flix only
+assert len(c.get("/trips", params={"origin": "Calgary", "destination": "Lethbridge"}).json()) == 1       # Flix only; WestJet ended these flights Jun 24, 2026
 assert c.get("/trips", params={"origin": "Edmonton", "destination": "Toledo"}).json() == []
+
+# ---- Flights (Alaska and Alberta): listings with no times and no fare, mode Air, no estimate flag ----
+fl = c.get("/trips", params={"origin": "Anchorage", "destination": "Nome"}).json()
+assert [x["operator"] for x in fl] == ["Alaska Airlines"], fl
+f0 = fl[0]
+assert f0["mode"] == "Air" and f0["depart"] is None and f0["arrive"] is None and f0["price"] is None and not f0["fare_estimated"]
+assert f0["currency"] == "USD" and f0["url"] == "https://www.alaskaair.com" and not f0["partner"]
+assert {x["operator"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Kenai"}).json()} == {"Grant Aviation", "Aleutian Airways"}
+assert {x["operator"] for x in c.get("/trips", params={"origin": "Homer", "destination": "Anchorage"}).json()} == {"Aleutian Airways"}
+assert [x["mode"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks", "mode": "Air"}).json()] == ["Air"]
+assert {x["mode"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json()} == {"Rail", "Air"}
+assert c.get("/trips", params={"origin": "Nome", "destination": "Kotzebue"}).json() == []                 # only Anchorage hub routes are listed
+cal = c.get("/trips", params={"origin": "Fort McMurray", "destination": "Calgary", "mode": "Air"}).json()
+assert {x["operator"] for x in cal} == {"Air Canada", "WestJet"} and all(x["currency"] == "CAD" and x["price"] is None for x in cal)
+assert c.get("/trips", params={"origin": "Calgary", "destination": "Medicine Hat", "mode": "Air"}).json() == []   # ended Jun 24, 2026
+assert c.get("/trips", params={"origin": "Toledo", "destination": "Columbus", "mode": "Air"}).json() == []        # no flights between Ohio cities
+assert all(not any(x["mode"] == "Air" for x in c.get("/trips", params={"origin": a_, "destination": b_}).json()) for a_, b_ in (("Toledo", "Cincinnati"), ("Columbus", "Athens")))
+assert sum(len(o["trips"]) for o in flight_data.OPERATORS.values()) == 22 + 2 + 12 + 6 + 10 + 2
 assert all(x["currency"] == "USD" for x in g)                                                          # Ohio stays in US dollars
 for o_ in alberta_data.OPERATORS.values():
     assert o_["name"].endswith("(Alberta)") and not o_["is_partner"]
@@ -93,7 +115,7 @@ assert rail["source_url"] == arr_data.SCHEDULE_URL and rail["season_start"] == "
 assert t[0]["sample"] is True and t[0]["in_season"] is None
 off = c.get("/trips", params={"origin": "Anchorage", "destination": "Seward", "mode": "Rail", "on": "2026-10-21"}).json()
 assert len(off) == 1 and off[0]["in_season"] is False       # the old Sample Railroad row is hidden
-assert len(c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json()) == 2   # Denali Star + Aurora Winter
+assert len(c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks"}).json()) == 3   # Denali Star + Aurora Winter + Alaska Airlines
 assert c.get("/trips", params={"origin": "Fairbanks", "destination": "Seward"}).json() == []
 
 # restart keeps ids stable, adds no duplicates, keeps click history
@@ -106,6 +128,8 @@ ab_before = [x["id"] for x in c.get("/trips", params={"origin": "Edmonton", "des
 db = main.get_db()
 nab = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.name LIKE ? AND t.is_active = ?", ("% (Alberta)", True)).fetchone()["n"]
 assert nab == len(alberta_data.ALBERTA_TRIPS), nab
+nfl = db.execute("SELECT COUNT(*) AS n FROM trips t JOIN operators o ON o.id=t.operator_id WHERE o.mode = ? AND t.is_active = ?", ("Air", True)).fetchone()["n"]
+assert nfl == sum(len(o["trips"]) for o in flight_data.OPERATORS.values()), nfl
 db.close()
 main.setup_database()
 assert [x["id"] for x in c.get("/trips", params={"origin": "Edmonton", "destination": "Calgary"}).json()] == ab_before   # Alberta ids stable
@@ -172,4 +196,18 @@ assert c.get("/partner-reports", headers={"X-Admin-Key": "wrong"}).status_code =
 assert c.get("/partner-reports", headers={"X-Admin-Key": "secret"}).status_code == 200
 assert c.post("/partner-reports", json=good, headers={"X-Admin-Key": "secret"}).json()["status"] == "updated"
 main.ADMIN_KEY = ""
+# Saturday-only winter train: runs on a Saturday in season, not on a Tuesday
+sat = lambda d: [x for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Fairbanks", "mode": "Rail", "on": d}).json() if x["days"].startswith("Saturday")][0]["in_season"]
+assert sat("2026-11-21") is True and sat("2026-11-17") is False, "weekday check"
+# Ravn Alaska stopped flying in Aug 2025: even a database that still holds its rows must hide them
+db = main.get_db()
+rid = main.get_operator_id(db, "Ravn Alaska", "Air", False, "https://www.flyravn.com", "old")
+db.execute("INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, days_running, season_start, season_end, booking_url, source_url, last_updated, is_sample, is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+           (rid, "Anchorage", "Homer", "", "", 0, None, None, None, "https://www.flyravn.com", "x", "2025-01-01", False, True, False))
+db.commit(); db.close()
+main.setup_database()
+assert not [x for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Homer"}).json() if x["operator"] == "Ravn Alaska"], "Ravn hidden"
+# Dutch Harbor, Sand Point, Unalakleet (Aleutian) and Air North (Calgary to Edmonton) are listed
+assert [x["operator"] for x in c.get("/trips", params={"origin": "Anchorage", "destination": "Unalakleet"}).json()] == ["Aleutian Airways"]
+assert "Air North" in [x["operator"] for x in c.get("/trips", params={"origin": "Calgary", "destination": "Edmonton"}).json()]
 print("ALL TESTS PASSED", "postgres" if main.USE_POSTGRES else "sqlite")
