@@ -1,98 +1,653 @@
-"""Scheduled airline routes for Alaska and Alberta, from public news pages and airline route lists. Unofficial.
+"""Backend API for the Rural Travel Co-op prototype (sample data only).
 
-WHAT IS HERE AND WHAT IS NOT. Each row says: this airline flies between these two places. There are NO times and NO
-fares: airlines show both only inside their booking engines, so the rider is sent to the airline's own site. Rows are
-stored with empty time text and price 0; the API shows both as null (same rule as the Alberta bus listings).
-Routes change often (seasons, carriers leaving), so every row is a snapshot and the app says so.
+Run locally:  uvicorn main:app --reload      (from the backend folder)
+API docs:     http://localhost:8000/docs
 
-ALASKA (US dollars)
-  Alaska Airlines: in-state nonstops from Anchorage to Fairbanks, Kodiak, Cordova, King Salmon, Adak, Dillingham,
-    Bethel, Nome, Kotzebue and Utqiagvik (Anchorage Daily News, Oct 11, 2025); Anchorage to Juneau (Alaska Air Cargo
-    summer 2026 network page).
-  Grant Aviation: Anchorage to Kenai (Alaska Business, Mar 2025; FlightConnections, Apr 2026). Kenai Aviation, which
-    also flew this route, shut down (AvWeb), so it is not listed.
-  Aleutian Airways: Anchorage to Kenai (two daily round trips from June 6, 2025; KDLL, Feb 28, 2025), Homer, King
-    Salmon, Dutch Harbor and Sand Point (Alaska Airlines partner page for Aleutian), and Unalakleet (three weekly round
-    trips from Dec 2, 2025; Peninsula Clarion).
-  Ravn Alaska is NOT listed: it ended Homer service on March 3, 2025 and stopped all operations on August 5, 2025
-    (City of Homer airport page; Anchorage Daily News). Schedule sites that still show it are out of date.
+Done on Day 1:  /health, /cities, /trips
+Day 5: /members saves sign ups (free Tier 1 or paid Tier 2) and /members/count summarizes them.
+Day 4: /clicks logs referral clicks in SQLite and /clicks/report summarizes them.
+Day 2: trips now live in a database instead of a Python list.
+Week 9 Day 2: set DATABASE_URL to use hosted Postgres (Neon); without it a local SQLite file is used.
+"""
+import os
+import sqlite3
+from pathlib import Path
+from datetime import date
+from typing import Optional
 
-ALBERTA (Canadian dollars)
-  Air Canada and WestJet between Calgary and Edmonton, Fort McMurray and Grande Prairie, and WestJet between Edmonton
-  and Fort McMurray and Grande Prairie (Air Canada route page; WestJet summer 2026 schedule changes on AeroRoutes;
-  FlightConnections). Air North between Calgary and Edmonton (flyairnorth.com is its own site).
-  NOT listed: WestJet's Calgary to Lethbridge and Calgary to Medicine Hat flights, which ended June 24, 2026.
-  Not listed: small northern carriers.
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 
-OHIO: no rows. The sources I found show Ohio airports (Columbus, Cleveland, Cincinnati, Dayton, Akron-Canton, Toledo)
-served by flights to other states, and no scheduled airline flights between Ohio cities. The app shows a note instead.
+import alberta_data
+import arr_data
+import flight_data
+import gobus_data
+from data import TRIPS
 
-Booking links are each airline's home page. Each of the six site addresses was seen on public pages (Day 2 check).
-Not checked: whether an airline keeps our tracking code on its own site."""
+app = FastAPI(title="Rural Travel Co-op API (prototype)")
 
-CHECKED = "2026-11-17"
+# Week 9 Day 2: if the DATABASE_URL environment variable is set (the Neon connection string),
+# the API uses that hosted Postgres database. If it is not set, it uses a local SQLite file,
+# so running on your own computer still works with no setup.
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USE_POSTGRES = DATABASE_URL.startswith("postgres")
+DB_PATH = Path(__file__).parent / "trips.db"
 
-OPERATORS = {
-    "Alaska Airlines": {
-        "name": "Alaska Airlines", "mode": "Air", "is_partner": False, "booking_url": "https://www.alaskaair.com",
-        "notes": "Airline. Listing only: no times or fares. Not a partner.", "region": "Alaska",
-        "src": "https://www.adn.com/alaska-life/travel/2025/10/11/with-tourism-season-in-the-rearview-mirror-alaskas-airline-calendar-begins-to-shift/",
-        "pairs": [("Anchorage", c) for c in ("Fairbanks", "Juneau", "Kodiak", "Cordova", "King Salmon", "Adak",
-                                             "Dillingham", "Bethel", "Nome", "Kotzebue", "Utqiagvik")],
-    },
-    "Grant Aviation": {
-        "name": "Grant Aviation", "mode": "Air", "is_partner": False, "booking_url": "https://www.flygrant.com",
-        "notes": "Small plane airline. Listing only: no times or fares. Not a partner.", "region": "Alaska",
-        "src": "https://www.akbizmag.com/industry/transportation/aleutian-airways-adding-daily-service-to-kenai/",
-        "pairs": [("Anchorage", "Kenai")],
-    },
-    "Aleutian Airways": {
-        "name": "Aleutian Airways", "mode": "Air", "is_partner": False, "booking_url": "https://www.flyaleutian.com",
-        "notes": "Airline. Listing only: no times or fares. Not a partner.", "region": "Alaska",
-        "src": "https://www.kdll.org/local-news/2025-02-28/aleutian-airways-to-launch-kenai-anchorage-flights",
-        "pairs": [("Anchorage", "Kenai"),
-                  ("Anchorage", "Homer", "https://www.alaskaair.com/ko-kr/atmosrewards/content/partners/airlines/aleutian-airways"),
-                  ("Anchorage", "King Salmon", "https://www.alaskaair.com/ko-kr/atmosrewards/content/partners/airlines/aleutian-airways"),
-                  ("Anchorage", "Dutch Harbor", "https://www.alaskaair.com/ko-kr/atmosrewards/content/partners/airlines/aleutian-airways"),
-                  ("Anchorage", "Sand Point", "https://www.alaskaair.com/ko-kr/atmosrewards/content/partners/airlines/aleutian-airways"),
-                  ("Anchorage", "Unalakleet", "https://www.peninsulaclarion.com/news/aleutian-airways-to-offer-roundtrip-flights-between-anchorage-and-unalakleet/")],
-    },
-    "Air Canada": {
-        "name": "Air Canada", "mode": "Air", "is_partner": False, "booking_url": "https://www.aircanada.com",
-        "notes": "Airline. Listing only: no times or fares. Not a partner.", "region": "Alberta",
-        "src": "https://www.flightconnections.com/flights-to-edmonton-yeg",
-        "pairs": [("Calgary", "Edmonton", "https://aviability.com/en/airport/yeg-edmonton/destinations"),
-                  ("Calgary", "Fort McMurray", "https://www.aircanada.com/en-ca/flights-from-calgary-to-fort-mcmurray"),
-                  ("Calgary", "Grande Prairie", "https://www.flightconnections.com/flights-from-yyc-to-yqu")],
-    },
-    "WestJet": {
-        "name": "WestJet", "mode": "Air", "is_partner": False, "booking_url": "https://www.westjet.com",
-        "notes": "Airline. Listing only: no times or fares. Not a partner.", "region": "Alberta",
-        "src": "https://www.flightconnections.com/flights-to-edmonton-yeg",
-        "pairs": [("Calgary", "Edmonton", "https://www.aeroroutes.com/eng/260224-wsns26ca"), ("Calgary", "Fort McMurray", "https://www.aeroroutes.com/eng/260224-wsns26ca"),
-                  ("Calgary", "Grande Prairie", "https://www.flightconnections.com/flights-from-yyc-to-yqu"),
-                  ("Edmonton", "Fort McMurray", "https://www.aeroroutes.com/eng/260224-wsns26ca"), ("Edmonton", "Grande Prairie", "https://www.aeroroutes.com/eng/260224-wsns26ca")],
-    },
-    "Air North": {
-        "name": "Air North", "mode": "Air", "is_partner": False, "booking_url": "https://www.flyairnorth.com",
-        "notes": "Airline based in Whitehorse. Listing only: no times or fares. Not a partner.", "region": "Alberta",
-        "src": "https://aviability.com/en/airport/yeg-edmonton/destinations",
-        "pairs": [("Calgary", "Edmonton")],
-    },
+if USE_POSTGRES:
+    import psycopg
+    from psycopg.rows import dict_row
+
+
+class Db:
+    """Small wrapper so the rest of the code does not care which database is behind it."""
+
+    def __init__(self) -> None:
+        if USE_POSTGRES:
+            self.conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=15)
+        else:
+            self.conn = sqlite3.connect(DB_PATH)
+            self.conn.row_factory = sqlite3.Row   # lets us read columns by name
+
+    def execute(self, sql: str, params: tuple = ()):
+        if USE_POSTGRES:
+            sql = sql.replace("?", "%s")           # Postgres uses %s, SQLite uses ?
+        return self.conn.execute(sql, params)
+
+    def insert(self, sql: str, params: tuple = ()) -> int:
+        """Run an INSERT and return the new row id."""
+        if USE_POSTGRES:
+            return self.execute(sql + " RETURNING id", params).fetchone()["id"]
+        return self.execute(sql, params).lastrowid
+
+    def commit(self) -> None:
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+
+def get_db() -> Db:
+    return Db()
+
+
+SQLITE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS operators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, mode TEXT NOT NULL,
+    is_partner INTEGER NOT NULL DEFAULT 0, booking_url TEXT, notes TEXT);
+CREATE TABLE IF NOT EXISTS trips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL REFERENCES operators(id),
+    origin TEXT NOT NULL, destination TEXT NOT NULL, depart_time TEXT NOT NULL,
+    arrive_time TEXT NOT NULL, price REAL NOT NULL, days_running TEXT, season_start TEXT,
+    season_end TEXT, booking_url TEXT, source_url TEXT, last_updated TEXT DEFAULT CURRENT_DATE,
+    is_sample INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
+    fare_estimated INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL,
+    trip_id INTEGER NOT NULL REFERENCES trips(id), riders INTEGER NOT NULL DEFAULT 1,
+    price_at_click REAL NOT NULL, confirmed INTEGER NOT NULL DEFAULT 0,
+    clicked_at TEXT DEFAULT CURRENT_TIMESTAMP, confirmed_at TEXT);
+CREATE TABLE IF NOT EXISTS members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE,
+    tier INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS partner_weekly_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL REFERENCES operators(id),
+    week_start TEXT NOT NULL, route_label TEXT NOT NULL, partner_sales_total REAL NOT NULL,
+    tagged_tickets INTEGER NOT NULL DEFAULT 0, tagged_value REAL NOT NULL DEFAULT 0, notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE (operator_id, week_start, route_label));
+"""
+
+
+def setup_database() -> None:
+    """Create the tables if needed and fill them with the made up sample trips if empty."""
+    db = get_db()
+    if USE_POSTGRES:
+        # schema.sql is the same file you ran in the Neon SQL Editor. It is safe to run again.
+        db.conn.execute((Path(__file__).parent / "schema.sql").read_text())
+    else:
+        cols = [r["name"] for r in db.execute("PRAGMA table_info(trips)").fetchall()]
+        if cols and "operator_id" not in cols:
+            # An old trips.db from before Week 9 has a different layout. It only held sample data,
+            # so it is safe to remove and rebuild.
+            for table in ("clicks", "members", "trips"):
+                db.execute(f"DROP TABLE IF EXISTS {table}")
+        db.conn.executescript(SQLITE_SCHEMA)
+        cols = [r["name"] for r in db.execute("PRAGMA table_info(trips)").fetchall()]
+        if "is_active" not in cols:
+            db.execute("ALTER TABLE trips ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        if "fare_estimated" not in cols:
+            db.execute("ALTER TABLE trips ADD COLUMN fare_estimated INTEGER NOT NULL DEFAULT 0")
+    seed_demo_trips(db)
+    load_arr_trips(db)
+    load_gobus_trips(db)
+    load_alberta_trips(db)
+    load_flight_trips(db)
+    db.commit()
+    db.close()
+
+
+def get_operator_id(db: Db, name: str, mode: str, is_partner: bool, url: str, notes: str = "") -> int:
+    row = db.execute("SELECT id FROM operators WHERE name = ?", (name,)).fetchone()
+    if row:
+        return row["id"]
+    return db.insert("INSERT INTO operators (name, mode, is_partner, booking_url, notes) "
+                     "VALUES (?,?,?,?,?)", (name, mode, is_partner, url, notes))
+
+
+def seed_demo_trips(db: Db) -> None:
+    """Made up bus trips, added only on a brand new database."""
+    if db.execute("SELECT COUNT(*) AS n FROM trips").fetchone()["n"] > 0:
+        return
+    for t in TRIPS:
+        op_id = get_operator_id(db, t["operator"], t["mode"], bool(t["partner"]), t["url"])
+        db.execute(
+            "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+            "price, booking_url, is_sample) VALUES (?,?,?,?,?,?,?,?)",
+            (op_id, t["from"], t["to"], t["depart"], t["arrive"], t["price"], t["url"], True))
+
+
+def load_arr_trips(db: Db) -> None:
+    """Load the real, unofficial Alaska Railroad list. Safe to run on every start.
+
+    Each row is matched on route, departure time and season start: an existing row is updated
+    (so trip ids stay the same and click history is kept), a missing row is added, and any old
+    Alaska Railroad row no longer in arr_data.py is hidden. The old made up "Sample Railroad"
+    trips are hidden too."""
+    op = arr_data.OPERATOR
+    op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+    db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, op_id))
+    old = db.execute("SELECT id FROM operators WHERE name = ?", ("Sample Railroad",)).fetchone()
+    if old:
+        db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, old["id"]))
+    for (origin, dest, dep, arr, price, days, start, end) in arr_data.ARR_TRIPS:
+        days_text = f"{days} ({arr_data.CLASS_NOTE})"
+        found = db.execute(
+            "SELECT id FROM trips WHERE operator_id = ? AND origin = ? AND destination = ? "
+            "AND depart_time = ? AND season_start = ?", (op_id, origin, dest, dep, start)).fetchone()
+        if found:
+            db.execute(
+                "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_end = ?, "
+                "booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, is_active = ? "
+                "WHERE id = ?",
+                (arr, price, days_text, end, op["booking_url"], arr_data.SCHEDULE_URL,
+                 arr_data.CHECKED, False, True, found["id"]))
+        else:
+            db.execute(
+                "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                "price, days_running, season_start, season_end, booking_url, source_url, "
+                "last_updated, is_sample, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (op_id, origin, dest, dep, arr, price, days_text, start, end,
+                 op["booking_url"], arr_data.SCHEDULE_URL, arr_data.CHECKED, False, True))
+
+
+def load_gobus_trips(db: Db) -> None:
+    """Load the unofficial GoBus (Ohio) lists, one operator per line (Red, Green, Purple, ...).
+    Same upsert idea as the railroad list: a trip is found by line, route and departure time, so its id
+    (and any click history) stays the same; a missing row is added; a row that is no longer in the file
+    is hidden. Rows are only written when something changed, so a restart stays fast.
+    Fares here are estimates (see gobus_data.py), so every row is flagged fare_estimated."""
+    legacy = db.execute("SELECT id FROM operators WHERE name = ?", (gobus_data.LEGACY_OPERATOR,)).fetchone()
+    if legacy:   # the old single "GoBus (Ohio)" operator held only the Red Line, which now has its own row
+        db.execute("UPDATE trips SET is_active = ? WHERE operator_id = ?", (False, legacy["id"]))
+    for line, op in gobus_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, depart_time, arrive_time, price, days_running, "
+                            "season_start, season_end, source_url, last_updated, is_active, fare_estimated "
+                            "FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"], r["depart_time"])] = r
+        wanted = set()
+        for (origin, dest, dep, arr, price, days, start, end) in op["trips"]:
+            wanted.add((origin, dest, dep))
+            r = existing.get((origin, dest, dep))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, "
+                    "price, days_running, season_start, season_end, booking_url, source_url, "
+                    "last_updated, is_sample, is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, dep, arr, price, days, start, end, op["booking_url"],
+                     op["source_url"], gobus_data.CHECKED, False, True, True))
+                continue
+            same = (r["arrive_time"] == arr and float(r["price"]) == float(price) and r["days_running"] == days
+                    and (str(r["season_start"]) if r["season_start"] else None) == start
+                    and (str(r["season_end"]) if r["season_end"] else None) == end
+                    and r["source_url"] == op["source_url"] and str(r["last_updated"]) == gobus_data.CHECKED
+                    and bool(r["is_active"]) and bool(r["fare_estimated"]))
+            if not same:
+                db.execute(
+                    "UPDATE trips SET arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    (arr, price, days, start, end, op["booking_url"], op["source_url"], gobus_data.CHECKED,
+                     False, True, True, r["id"]))
+        for key, r in existing.items():
+            if key not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
+
+
+def load_alberta_trips(db: Db) -> None:
+    """Load the Alberta bus listings (Red Arrow, Flix, Cold Shot, Rider Express), one operator each.
+    These rows have no times: depart_time and arrive_time are stored as empty text and price 0 means "no fare shown"
+    (the API turns both into null). A row is found by operator, origin and destination. Only Red Arrow rows carry a
+    fare, and it is an estimate (see alberta_data.py), so only those rows are flagged fare_estimated."""
+    for key, op in alberta_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, price, days_running, source_url, last_updated, "
+                            "is_active, fare_estimated FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"])] = r
+        wanted = set()
+        for (origin, dest, days, price, src) in op["trips"]:
+            wanted.add((origin, dest))
+            price_db = price if price is not None else 0
+            estimated = price is not None
+            r = existing.get((origin, dest))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, "
+                    "days_running, season_start, season_end, booking_url, source_url, last_updated, is_sample, "
+                    "is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, "", "", price_db, days, None, None, op["booking_url"], src,
+                     alberta_data.CHECKED, False, True, estimated))
+                continue
+            same = (float(r["price"]) == float(price_db) and r["days_running"] == days and r["source_url"] == src
+                    and str(r["last_updated"]) == alberta_data.CHECKED and bool(r["is_active"])
+                    and bool(r["fare_estimated"]) == estimated)
+            if not same:
+                db.execute(
+                    "UPDATE trips SET depart_time = ?, arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    ("", "", price_db, days, None, None, op["booking_url"], src, alberta_data.CHECKED, False, True,
+                     estimated, r["id"]))
+        for k, r in existing.items():
+            if k not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
+    # An operator taken out of flight_data.py (Ravn Alaska stopped flying in 2025) keeps its old rows in a database
+    # made earlier, so hide them here.
+    for name in flight_data.REMOVED_OPERATORS:
+        db.execute("UPDATE trips SET is_active = ? WHERE is_active = ? AND operator_id IN "
+                   "(SELECT id FROM operators WHERE name = ?)", (False, True, name))
+
+
+def load_flight_trips(db: Db) -> None:
+    """Load the airline route listings (Alaska Airlines, Grant, Aleutian in Alaska; Air Canada, WestJet and Air North in
+    Alberta), one operator each. Same shape as the Alberta bus listings: no times (empty text), price 0 meaning
+    "no fare shown", no fare estimate. A row is found by operator, origin and destination; a row no longer in
+    flight_data.py is hidden."""
+    for key, op in flight_data.OPERATORS.items():
+        op_id = get_operator_id(db, op["name"], op["mode"], op["is_partner"], op["booking_url"], op["notes"])
+        existing = {}
+        for r in db.execute("SELECT id, origin, destination, price, days_running, source_url, last_updated, "
+                            "is_active, fare_estimated FROM trips WHERE operator_id = ?", (op_id,)).fetchall():
+            existing[(r["origin"], r["destination"])] = r
+        wanted = set()
+        for (origin, dest, days, price, src) in op["trips"]:
+            wanted.add((origin, dest))
+            r = existing.get((origin, dest))
+            if r is None:
+                db.execute(
+                    "INSERT INTO trips (operator_id, origin, destination, depart_time, arrive_time, price, "
+                    "days_running, season_start, season_end, booking_url, source_url, last_updated, is_sample, "
+                    "is_active, fare_estimated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, origin, dest, "", "", 0, days, None, None, op["booking_url"], src,
+                     flight_data.CHECKED, False, True, False))
+                continue
+            same = (float(r["price"]) == 0.0 and r["days_running"] == days and r["source_url"] == src
+                    and str(r["last_updated"]) == flight_data.CHECKED and bool(r["is_active"])
+                    and not bool(r["fare_estimated"]))
+            if not same:
+                db.execute(
+                    "UPDATE trips SET depart_time = ?, arrive_time = ?, price = ?, days_running = ?, season_start = ?, "
+                    "season_end = ?, booking_url = ?, source_url = ?, last_updated = ?, is_sample = ?, "
+                    "is_active = ?, fare_estimated = ? WHERE id = ?",
+                    ("", "", 0, days, None, None, op["booking_url"], src, flight_data.CHECKED, False, True,
+                     False, r["id"]))
+        for k, r in existing.items():
+            if k not in wanted and r["is_active"]:
+                db.execute("UPDATE trips SET is_active = ? WHERE id = ?", (False, r["id"]))
+
+
+setup_database()
+
+
+@app.get("/health")
+def health() -> dict:
+    # Says which database is in use, so you can tell if DATABASE_URL was picked up.
+    # "postgres" means Neon. "sqlite" means the temporary local file, which is wiped on every Render restart.
+    return {"status": "ok", "database": "postgres" if USE_POSTGRES else "sqlite"}
+
+
+# Which region each place belongs to. Add a row here when a new pilot region is added.
+REGION_OF = {
+    "Anchorage": "Alaska", "Denali": "Alaska", "Fairbanks": "Alaska", "Girdwood": "Alaska", "Healy": "Alaska",
+    "Hurricane": "Alaska", "Seward": "Alaska", "Talkeetna": "Alaska", "Wasilla": "Alaska", "Whittier": "Alaska",
+    "Toledo": "Ohio", "Bowling Green": "Ohio", "Findlay": "Ohio", "Lima": "Ohio", "Kenton": "Ohio",
+    "Bellefontaine": "Ohio", "Urbana": "Ohio", "Springfield": "Ohio", "Yellow Springs": "Ohio",
+    "Dayton": "Ohio", "Middletown": "Ohio", "Oxford": "Ohio", "Cincinnati": "Ohio",
 }
+# Every other GoBus place (Columbus, Athens, Cleveland, ...). The "Ohio" region is the GoBus network,
+# so it includes a few stops just over the border (Parkersburg and Wheeling WV, Pittsburgh PA).
+REGION_OF.update({c: "Ohio" for c in gobus_data.GOBUS_CITIES})
+# Alberta bus listings (Canadian dollars). Lloydminster sits on the Alberta and Saskatchewan border; its listings
+# come from sources that label it Lloydminster, AB.
+REGION_OF.update({c: "Alberta" for c in alberta_data.ALBERTA_CITIES})
+# Places that only airlines serve (Juneau, Nome, Kodiak, ...).
+REGION_OF.update({c: "Alaska" for c in flight_data.ALASKA_AIR_CITIES})
+CURRENCY = {"Alberta": "CAD"}      # every other region is US dollars
 
-# Operators that used to be listed and must now be hidden in a database that still holds their rows.
-REMOVED_OPERATORS = ["Ravn Alaska"]
 
-# Both directions for every pair.
-for _op in OPERATORS.values():
-    # A pair is (place, place) or (place, place, source page for that pair).
-    _op["trips"] = [(p[0], p[1], None, None, p[2] if len(p) > 2 else _op["src"]) for p in _op["pairs"]] + \
-                   [(p[1], p[0], None, None, p[2] if len(p) > 2 else _op["src"]) for p in _op["pairs"]]
+def active_cities() -> list[str]:
+    db = get_db()
+    rows = db.execute("SELECT origin AS city FROM trips WHERE is_active = ? UNION "
+                      "SELECT destination AS city FROM trips WHERE is_active = ?",
+                      (True, True)).fetchall()
+    db.close()
+    return sorted(r["city"] for r in rows)
 
-# Places that exist only because of flights (the rest already belong to a region through rail or bus rows).
-ALASKA_AIR_CITIES = ["Adak", "Bethel", "Cordova", "Dillingham", "Dutch Harbor", "Homer", "Juneau", "Kenai", "King Salmon",
-                     "Kodiak", "Kotzebue", "Nome", "Sand Point", "Unalakleet", "Utqiagvik"]
 
-OHIO_NOTE = ("Airlines serve Columbus, Cleveland, Cincinnati, Dayton, Akron-Canton and Toledo mainly with flights to "
-             "other states. I found no scheduled flights between Ohio cities.")
+@app.get("/regions")
+def regions() -> list[dict]:
+    """Regions that have at least one active trip, each with its places (alphabetical)."""
+    out: dict[str, list[str]] = {}
+    for city in active_cities():
+        out.setdefault(REGION_OF.get(city, "Other"), []).append(city)
+    return [{"name": name, "cities": cs} for name, cs in sorted(out.items())]
+
+
+@app.get("/cities")
+def cities(region: Optional[str] = None) -> list[str]:
+    """Every place that appears in an active trip, in alphabetical order. Optional region filter."""
+    cs = active_cities()
+    if region:
+        cs = [c for c in cs if REGION_OF.get(c, "Other") == region]
+    return cs
+
+
+_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def season_status(start, end, on: Optional[date], days: Optional[str] = None) -> Optional[bool]:
+    """True if the trip runs on the date, False if not, None if unknown.
+
+    Checks the season dates, and the weekday when the days text names weekdays
+    (for example "Saturday northbound"). "Daily..." means every day."""
+    if on is None or not start or not end:
+        return None
+    if not (str(start) <= on.isoformat() <= str(end)):
+        return False
+    text = (days or "").lower()
+    if text and not text.startswith("daily"):
+        named = [i for i, d in enumerate(_WEEKDAYS) if d in text]
+        if named and on.weekday() not in named:
+            return False
+    return True
+
+
+@app.get("/trips")
+def search_trips(
+    origin: str = Query(..., description="Departure city"),
+    destination: str = Query(..., description="Arrival city"),
+    mode: Optional[str] = Query(None, description="Rail, Bus or Air. Leave empty for all."),
+    on: Optional[date] = Query(None, description="Travel date (YYYY-MM-DD). Adds an in_season flag."),
+) -> list[dict]:
+    """Return active trips for a route from the database, cheapest first."""
+    sql = ("SELECT t.id, t.origin, t.destination, t.depart_time, t.arrive_time, t.price, "
+           "t.days_running, t.season_start, t.season_end, t.source_url, t.last_updated, "
+           "COALESCE(t.booking_url, o.booking_url) AS url, o.name AS operator, o.mode, "
+           "o.is_partner, t.is_sample, t.fare_estimated FROM trips t JOIN operators o ON o.id = t.operator_id "
+           "WHERE t.is_active = ? AND lower(t.origin) = lower(?) AND lower(t.destination) = lower(?)")
+    params = [True, origin, destination]
+    if mode:
+        sql += " AND lower(o.mode) = lower(?)"
+        params.append(mode)
+    sql += " ORDER BY (t.price = 0), t.price"     # rows with no fare shown (price 0) go last
+    db = get_db()
+    rows = db.execute(sql, tuple(params)).fetchall()
+    db.close()
+    # Keep the same field names the frontend already uses ("from" and "to").
+    # Alberta listings have no times and some have no fare: those come back as null.
+    return [{"id": r["id"], "from": r["origin"], "to": r["destination"],
+             "operator": r["operator"], "mode": r["mode"], "depart": r["depart_time"] or None,
+             "arrive": r["arrive_time"] or None, "price": float(r["price"]) if float(r["price"]) > 0 else None,
+             "currency": CURRENCY.get(REGION_OF.get(r["origin"], ""), "USD"),
+             "partner": bool(r["is_partner"]), "url": r["url"],
+             "sample": bool(r["is_sample"]), "fare_estimated": bool(r["fare_estimated"]), "days": r["days_running"],
+             "season_start": str(r["season_start"]) if r["season_start"] else None,
+             "season_end": str(r["season_end"]) if r["season_end"] else None,
+             "in_season": season_status(r["season_start"], r["season_end"], on, r["days_running"]),
+             "source_url": r["source_url"],
+             "last_updated": str(r["last_updated"]) if r["last_updated"] else None} for r in rows]
+
+
+class Click(BaseModel):
+    ref: str          # tracking code, for example "coop-1"
+    trip_id: int
+    operator: str = ""   # kept so older frontends still work; the operator is read from the trip
+    riders: int = 1
+
+
+FEE_RATE = 0.06       # Base case blended fee from the payback model
+
+
+@app.post("/clicks")
+def log_click(click: Click) -> dict:
+    """Save one referral click. The price is read from the trips table, not from the browser."""
+    db = get_db()
+    trip = db.execute("SELECT t.price, o.name FROM trips t JOIN operators o ON o.id = t.operator_id "
+                      "WHERE t.id = ?", (click.trip_id,)).fetchone()
+    if trip is None:
+        db.close()
+        raise HTTPException(status_code=404, detail="Unknown trip_id")
+    click_id = db.insert(
+        "INSERT INTO clicks (ref, trip_id, price_at_click, riders) VALUES (?,?,?,?)",
+        (click.ref, click.trip_id, trip["price"], max(click.riders, 1)))
+    db.commit()
+    db.close()
+    return {"id": click_id, "ref": click.ref, "operator": trip["name"]}
+
+
+@app.post("/clicks/{click_id}/confirm")
+def confirm_click(click_id: int) -> dict:
+    """Pilot only: the partner reports that this click became a ticket sale."""
+    db = get_db()
+    cur = db.execute("UPDATE clicks SET confirmed = ?, confirmed_at = CURRENT_TIMESTAMP "
+                     "WHERE id = ?", (True, click_id))
+    db.commit()
+    found = cur.rowcount
+    db.close()
+    if found == 0:
+        raise HTTPException(status_code=404, detail="Unknown click id")
+    return {"id": click_id, "confirmed": True}
+
+
+@app.get("/clicks/report")
+def click_report(partner_sales: Optional[float] = Query(
+        None, description="Partner's total ticket sales ($) for the same routes and weeks")) -> dict:
+    """Clicks and confirmed bookings per operator, plus the capture rate if partner sales are given."""
+    db = get_db()
+    rows = db.execute("""SELECT o.name AS operator, COUNT(*) AS clicks,
+        SUM(CASE WHEN c.confirmed THEN 1 ELSE 0 END) AS bookings,
+        SUM(CASE WHEN c.confirmed THEN c.price_at_click * c.riders ELSE 0 END) AS booked_value
+        FROM clicks c JOIN trips t ON t.id = c.trip_id JOIN operators o ON o.id = t.operator_id
+        GROUP BY o.name ORDER BY COUNT(*) DESC""").fetchall()
+    db.close()
+    operators = []
+    for r in rows:
+        bookings = int(r["bookings"] or 0)
+        value = float(r["booked_value"] or 0.0)
+        operators.append({
+            "operator": r["operator"], "clicks": r["clicks"], "bookings": bookings,
+            "click_to_booking": round(bookings / r["clicks"], 3),
+            "booked_value": round(value, 2), "fee_value": round(value * FEE_RATE, 2)})
+    total_value = sum(o["booked_value"] for o in operators)
+    report = {"operators": operators,
+              "total_clicks": sum(o["clicks"] for o in operators),
+              "total_bookings": sum(o["bookings"] for o in operators),
+              "total_booked_value": round(total_value, 2),
+              "fee_rate": FEE_RATE}
+    if partner_sales and partner_sales > 0:
+        report["capture_rate"] = round(total_value / partner_sales, 4)
+    return report
+
+
+class Member(BaseModel):
+    email: str
+    tier: int         # 1 = free, 2 = paid
+
+
+@app.post("/members")
+def join(member: Member) -> dict:
+    """Save a sign up. No payment is taken in the prototype; Tier 2 is recorded as interest only."""
+    email = member.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or " " in email:
+        raise HTTPException(status_code=422, detail="Please enter a valid email address")
+    if member.tier not in (1, 2):
+        raise HTTPException(status_code=422, detail="Tier must be 1 (free) or 2 (paid)")
+    db = get_db()
+    existing = db.execute("SELECT id, tier FROM members WHERE email = ?", (email,)).fetchone()
+    if existing:
+        # Same email again: update the tier instead of creating a duplicate
+        db.execute("UPDATE members SET tier = ? WHERE id = ?", (member.tier, existing["id"]))
+        db.commit()
+        db.close()
+        return {"id": existing["id"], "email": email, "tier": member.tier, "status": "updated"}
+    member_id = db.insert("INSERT INTO members (email, tier) VALUES (?, ?)", (email, member.tier))
+    db.commit()
+    db.close()
+    return {"id": member_id, "email": email, "tier": member.tier, "status": "created"}
+
+
+class MemberRemoval(BaseModel):
+    email: str
+
+
+@app.post("/members/remove")
+def remove_member(req: MemberRemoval) -> dict:
+    """Delete a sign up by email. The answer is the same whether or not the email was on the list, so this
+    cannot be used to find out who has joined. Note: the prototype does not confirm by email first, so
+    anyone who knows an address could remove it. Add a confirmation link before real emails are sent."""
+    email = req.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or " " in email:
+        raise HTTPException(status_code=422, detail="Please enter a valid email address")
+    db = get_db()
+    db.execute("DELETE FROM members WHERE email = ?", (email,))
+    db.commit()
+    db.close()
+    return {"status": "done"}
+
+
+@app.get("/members/count")
+def member_count() -> dict:
+    """How many people joined, by tier (no emails are returned)."""
+    db = get_db()
+    rows = db.execute("SELECT tier, COUNT(*) AS n FROM members GROUP BY tier").fetchall()
+    db.close()
+    counts = {r["tier"]: r["n"] for r in rows}
+    return {"tier1": counts.get(1, 0), "tier2": counts.get(2, 0), "total": sum(counts.values())}
+
+
+# ---------------------------------------------------------------------------------------------
+# Week 9 Day 4: weekly numbers the partner reports during the pilot, and the capture rate.
+# Capture rate = value of tickets that carried our tracking code / the partner's total sales on the
+# same routes and weeks. Decision bands come from the Week 8 pilot design.
+# ---------------------------------------------------------------------------------------------
+GO_RATE = 0.09          # 9% or more: go
+EXTEND_RATE = 0.055     # 5.5% to 9%: extend and cut costs. Below 5.5%: stop or change the model.
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "").strip()   # if set, partner numbers need this key
+PILOT_WEEKS = 12
+PILOT_MIN_TICKETS = 100
+
+
+class PartnerReport(BaseModel):
+    operator: str
+    week_start: date
+    route_label: str = Field(min_length=1)
+    partner_sales_total: float = Field(gt=0)
+    tagged_tickets: int = Field(default=0, ge=0)
+    tagged_value: float = Field(default=0, ge=0)
+    notes: str = ""
+
+
+def decision_band(rate: float, weeks: int, tickets: int) -> str:
+    if rate >= GO_RATE:
+        band = "Go (9% or more)"
+    elif rate >= EXTEND_RATE:
+        band = "Extend the pilot and cut costs (5.5% to 9%)"
+    else:
+        band = "Stop or change the model (below 5.5%)"
+    if weeks < PILOT_WEEKS or tickets < PILOT_MIN_TICKETS:
+        return f"Preliminary, not a decision yet: {band}"
+    return band
+
+
+def require_admin(x_admin_key: str = Header(default="")) -> None:
+    """Staff only. If ADMIN_KEY is not set (local testing), anyone may call."""
+    if ADMIN_KEY and x_admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=401, detail="Staff key missing or wrong")
+
+
+@app.post("/partner-reports", dependencies=[Depends(require_admin)])
+def save_partner_report(rep: PartnerReport) -> dict:
+    """Staff entry: one row per operator, week and route label. Sending the same one again updates it."""
+    if rep.tagged_value > rep.partner_sales_total:
+        raise HTTPException(status_code=422,
+                            detail="Tagged value cannot be more than the partner's total sales")
+    if rep.tagged_tickets == 0 and rep.tagged_value > 0:
+        raise HTTPException(status_code=422, detail="Tagged value needs at least one tagged ticket")
+    db = get_db()
+    op = db.execute("SELECT id FROM operators WHERE name = ?", (rep.operator,)).fetchone()
+    if op is None:
+        db.close()
+        raise HTTPException(status_code=404, detail="Unknown operator")
+    existing = db.execute(
+        "SELECT id FROM partner_weekly_reports WHERE operator_id = ? AND week_start = ? AND route_label = ?",
+        (op["id"], rep.week_start.isoformat(), rep.route_label.strip())).fetchone()
+    values = (rep.partner_sales_total, rep.tagged_tickets, rep.tagged_value, rep.notes)
+    if existing:
+        db.execute("UPDATE partner_weekly_reports SET partner_sales_total = ?, tagged_tickets = ?, "
+                   "tagged_value = ?, notes = ? WHERE id = ?", values + (existing["id"],))
+        report_id, status = existing["id"], "updated"
+    else:
+        report_id = db.insert(
+            "INSERT INTO partner_weekly_reports (operator_id, week_start, route_label, partner_sales_total, "
+            "tagged_tickets, tagged_value, notes) VALUES (?,?,?,?,?,?,?)",
+            (op["id"], rep.week_start.isoformat(), rep.route_label.strip()) + values)
+        status = "created"
+    db.commit()
+    db.close()
+    return {"id": report_id, "status": status}
+
+
+@app.get("/partner-reports", dependencies=[Depends(require_admin)])
+def partner_reports(operator: Optional[str] = Query(None)) -> dict:
+    """All weekly rows with each week's capture rate, plus the running total and decision band."""
+    sql = ("SELECT r.id, o.name AS operator, r.week_start, r.route_label, r.partner_sales_total, "
+           "r.tagged_tickets, r.tagged_value, r.notes FROM partner_weekly_reports r "
+           "JOIN operators o ON o.id = r.operator_id")
+    params: tuple = ()
+    if operator:
+        sql += " WHERE o.name = ?"
+        params = (operator,)
+    sql += " ORDER BY r.week_start, o.name, r.route_label"
+    db = get_db()
+    rows = db.execute(sql, params).fetchall()
+    db.close()
+    out, sales, value, tickets, weeks = [], 0.0, 0.0, 0, set()
+    for r in rows:
+        s_total, t_value = float(r["partner_sales_total"]), float(r["tagged_value"])
+        sales += s_total
+        value += t_value
+        tickets += int(r["tagged_tickets"])
+        weeks.add(str(r["week_start"]))
+        out.append({"id": r["id"], "operator": r["operator"], "week_start": str(r["week_start"]),
+                    "route_label": r["route_label"], "partner_sales_total": s_total,
+                    "tagged_tickets": int(r["tagged_tickets"]), "tagged_value": t_value,
+                    "capture_rate": round(t_value / s_total, 4) if s_total else None,
+                    "notes": r["notes"] or ""})
+    summary = {"weeks_reported": len(weeks), "partner_sales_total": round(sales, 2),
+               "tagged_tickets": tickets, "tagged_value": round(value, 2),
+               "capture_rate": round(value / sales, 4) if sales else None,
+               "fee_value": round(value * FEE_RATE, 2),
+               "decision": decision_band(value / sales, len(weeks), tickets) if sales else "No data yet",
+               "note": "Tagged sales are a floor: some buyers click through but book later without the code."}
+    return {"rows": out, "summary": summary}
