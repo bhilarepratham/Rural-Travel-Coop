@@ -20,9 +20,14 @@ Its FAQ adds that a trip under 50 miles on one line is $5, and its Red Line broc
 fares on those lines are $5 to $25. GoBus's own ticket page now lists base fares of "$5, $10, $15, $20, $25, or $30" and says the one way
 maximum is $40 when changing lines. It publishes no distance rule for the $30 fare, so this file still stops at $25
 for a trip of 200 miles or more on one line; a few very long trips may really cost $30. Sales tax and a service
-charge ($2.50 on the booking site) are added on top of the base fare. A March 2026 news story gives $40 for Yellow
+charge are added on top of the base fare (GoBus's ticket page says $2.00 and a March 2026 news story says $2.50, so the
+amount is not settled). Rechecked on 2026-11-24: the ticket page, FAQ, news stories and a county brochure still give no
+distance rule for the $30 fare, only "based on the distance" and a $40 one way maximum. A March 2026 news story gives $40 for Yellow
 Springs to Toledo, which is on one line and does not fit any other published fare; it is treated as unconfirmed.
-Changing lines is not modeled. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
+Changing lines is not modeled.
+Orange schedules 58 and 59 print Athens Baker Center at 5:30 PM, earlier than Athens Community Center (5:40 and
+5:45 PM). The PDF was read on screen on 2026-11-24 and the printed times are as loaded, so this is in GoBus's file; the loader
+keeps the first Athens stop, Community Center. We do not know GoBus's exact mile count for a pair of stops, so the miles are straight line
 miles between town centers along the route times a road factor of 1.12. The factor is an assumption: 1.09 to
 1.16 reproduces six one way fares found in news and an unofficial fare listing, and the $25 top fare on the Red Line. Every row from this file is flagged fare_estimated and shown that way."""
 import json
