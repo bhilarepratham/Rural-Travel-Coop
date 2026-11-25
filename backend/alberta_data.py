@@ -1,4 +1,4 @@
-"""Alberta bus listings: which carrier serves which pair of towns, from public pages. Unofficial.
+"""Alberta bus listings: which carrier sells which pair of towns, from public pages. Unofficial.
 
 WHAT IS HERE AND WHAT IS NOT. No Alberta carrier publishes a timetable we could read (times appear only inside each
 carrier's booking engine), so these rows have NO departure or arrival times. Each row says: this carrier sells a
@@ -29,7 +29,9 @@ CITY_XY = {
     "Boyle": (54.58, -112.81), "Grassland": (54.98, -112.47), "Wandering River": (55.17, -112.50),
 }
 
-RA_BOOK = "https://www.redarrow.ca/order/reservation"
+# Red Arrow's own "Book Now" button points here (read on redarrow.ca on 2026-11-24). The older
+# redarrow.ca/order/reservation address now redirects to the home page and drops our tracking code.
+RA_BOOK = "https://pwt.betterez.com/cart/60d0b80b88369e0fb992a014/reservation/60d0b80b88369e0fb992a015"
 RA_ROUTES = "https://www.redarrow.ca/routes/"
 SRC_A = RA_ROUTES + "calgary-to-edmonton"
 SRC_B = RA_ROUTES + "edmonton-to-fort-mcmurray/"
